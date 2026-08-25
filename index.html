@@ -119,7 +119,7 @@ button,input,select,textarea{max-width:100%;min-width:0}
         <div class="privacyNote">Die Datei wird nicht zu GitHub hochgeladen und nicht automatisch versendet. Bewahre sie nur in deiner Dateien-App bzw. einem privaten Backup auf.</div>
       </div>
     </div></div>
-    <div class="app"><div class="header"><div class="brand"><div class="logo">🏋️</div><div><h1>Peak Fitness</h1><div class="kicker">Hypertrophy-first Hybrid · v10.1</div></div></div></div>
+    <div class="app"><div class="header"><div class="brand"><div class="logo">🏋️</div><div><h1>Peak Fitness</h1><div class="kicker">Hypertrophy-first Hybrid · v10.2</div></div></div></div>
 <section id="home" class="section active"></section><section id="workout" class="section"></section><section id="calendar" class="section"></section><section id="progressPage" class="section"></section><section id="coach" class="section"></section><section id="more" class="section"></section></div>
 <div class="bottomnav"><div class="bottominner"><button class="navbtn active" data-page="home"><span class="ico">⌂</span>Heute</button><button class="navbtn" data-page="workout"><span class="ico">●</span>Training</button><button class="navbtn" data-page="calendar"><span class="ico">▦</span>Plan</button><button class="navbtn" data-page="progressPage"><span class="ico">↗</span>Fortschritt</button><button class="navbtn" data-page="coach"><span class="ico">✦</span>Coach</button></div></div>
 <div id="finishModal" class="modal"><div class="sheet"><div class="title">Training abschließen</div><div class="card soft"><div class="metric"><span>Dauer</span><strong id="finishDuration">–</strong></div><div class="metric"><span>Sätze</span><strong id="finishSets">–</strong></div><div class="metric"><span>Volumen</span><strong id="finishVolume">–</strong></div></div><label>Notiz</label><textarea id="sessionNote"></textarea><button class="primary" id="confirmFinish" style="margin-top:10px">Speichern & beenden</button><button class="secondary" id="cancelFinish" style="margin-top:7px">Zurück</button></div></div>
@@ -212,12 +212,26 @@ function nextSetSuggestion(name){
 
 function dailyLogs(){return JSON.parse(localStorage.getItem("pf_daily_logs")||"{}")}
 function saveDailyLogs(x){localStorage.setItem("pf_daily_logs",JSON.stringify(x))}
-function todayLog(){const r=readiness(),x=dailyLogs()[iso(new Date())]||{};return {sleep:x.sleep??r.sleep,quality:x.quality??3,energy:x.energy??r.energy,soreness:x.soreness??r.soreness,stress:x.stress??r.stress,rhr:x.rhr??"",steps:x.steps??"",water:x.water??""}}
-window.saveDailyTracker=()=>{
- const x=dailyLogs(),k=iso(new Date());
- x[k]={sleep:+trSleep.value||0,quality:+trQuality.value||3,energy:+trEnergy.value||3,soreness:+trSoreness.value||2,stress:+trStress.value||2,rhr:+trRhr.value||0,steps:+trSteps.value||0,water:+trWater.value||0};
- saveDailyLogs(x);saveReadinessData({sleep:x[k].sleep,energy:x[k].energy,soreness:x[k].soreness,stress:x[k].stress});
- awardXP(15,"daily_tracker_"+k);renderHome();renderCoach();
+function todayLog(){
+ const r=readiness(),x=dailyLogs()[iso(new Date())]||{};
+ return {
+   sleep:x.sleep??r.sleep,quality:x.quality??3,energy:x.energy??r.energy,
+   soreness:x.soreness??r.soreness,stress:x.stress??r.stress,rhr:x.rhr??"",
+   steps:x.steps??"",water:x.water??"",dayLoad:x.dayLoad??3,eveningNote:x.eveningNote??"",
+   morningDone:!!x.morningDone,eveningDone:!!x.eveningDone
+ };
+}
+window.saveMorningCheckin=()=>{
+ const logs=dailyLogs(),k=iso(new Date()),old=logs[k]||{};
+ logs[k]={...old,sleep:+mSleep.value||0,quality:+mQuality.value||3,energy:+mEnergy.value||3,soreness:+mSoreness.value||2,stress:+mStress.value||2,rhr:+mRhr.value||0,morningDone:true};
+ saveDailyLogs(logs);
+ saveReadinessData({sleep:logs[k].sleep,energy:logs[k].energy,soreness:logs[k].soreness,stress:logs[k].stress});
+ awardXP(15,"morning_"+k);renderHome();renderCoach();
+}
+window.saveEveningCheckin=()=>{
+ const logs=dailyLogs(),k=iso(new Date()),old=logs[k]||{};
+ logs[k]={...old,steps:+eSteps.value||0,water:+eWater.value||0,dayLoad:+eDayLoad.value||3,eveningNote:eNote.value||"",eveningDone:true};
+ saveDailyLogs(logs);awardXP(10,"evening_"+k);renderHome();
 }
 function sleep7(){
  const logs=dailyLogs(),arr=[];for(let i=6;i>=0;i--){const d=new Date();d.setDate(d.getDate()-i);const x=logs[iso(d)];if(x?.sleep)arr.push(x.sleep)}
@@ -338,13 +352,14 @@ function adaptiveWeek(){
   return result;
 }
 function coachSummary(){
+  const tl=todayLog();
   const r=readiness(), done=completedThisWeek();
   let msg="Diese Woche: "+done.length+" Gym-Einheiten erledigt. ";
   if(r.sleep<6) msg+="Schlaf ist aktuell der größte Engpass. ";
   else if(r.energy<=2) msg+="Energie ist niedrig; Volumen eher halten oder reduzieren. ";
   else if(r.soreness>=4) msg+="Muskelkater ist hoch; keine harte Einheit für die betroffenen Bereiche erzwingen. ";
   else msg+="Readiness sieht solide aus. ";
-  return msg;
+  if(tl.eveningDone&&tl.dayLoad>=4)msg+=" Gestern/heute war die Tagesbelastung hoch; zusätzliche Intensität konservativ planen."; return msg;
 }
 function coachPrompt(){
   const r=readiness(), ps=peakFitnessScore(), n=nutrition(), week=adaptiveWeek().map(x=>`${fmt(x.date,{weekday:"short",day:"2-digit",month:"2-digit"})}: ${x.plan} (${x.note})`).join("\n");
@@ -482,21 +497,31 @@ window.saveNutritionForm=()=>{saveNutrition({calories:+nCal.value||2600,protein:
 
 function renderHome(){
  const d=new Date(),eff=effectiveShift(d),rec=recommendation(d),latest=bodyHist().slice(-1)[0],lastC=cardioHist().slice(-1)[0],t=todayLog(),avg=sleep7();
- home.innerHTML=`<div class="card hero"><div class="row"><div class="sub">${fmt(d)}</div><span class="badge ${effectiveCls(eff)}">${effectiveShiftName(eff)}</span></div><div class="big">${rec.main}</div><div class="sub">${rec.extra}</div><div class="sub" style="margin-top:7px">${coachSummary()}</div>${keys().includes(rec.main)?`<button class="primary" style="margin-top:13px" onclick="quickStart('${rec.main}')">Training starten</button>`:""}<div class="quick"><button onclick="document.getElementById('trackerCard').scrollIntoView({behavior:'smooth'})"><b>Tracker</b><span>${t.sleep||"–"} h Schlaf</span></button><button onclick="showPage('progressPage')"><b>Gewicht</b><span>${latest?latest.weight+" kg":"noch leer"}</span></button><button onclick="openCardio()"><b>Cardio</b><span>${lastC?lastC.type:"eintragen"}</span></button><button onclick="showPage('calendar')"><b>7-Tage-Plan</b><span>adaptiv</span></button></div></div>
- <div class="card" id="trackerCard"><div class="row"><div><div class="title">Tages-Tracker</div><div class="sub">Schlaf, Erholung & Aktivität</div></div><span class="badge">${avg?`Ø ${avg.toFixed(1)} h`:"7 Tage"}</span></div>
- <div class="trackerGrid">
- <div class="trackBox"><label>Schlaf (h)</label><input id="trSleep" inputmode="decimal" value="${t.sleep}"></div>
- <div class="trackBox"><label>Schlafqualität 1–5</label><input id="trQuality" inputmode="numeric" value="${t.quality}"></div>
- <div class="trackBox"><label>Energie 1–5</label><input id="trEnergy" inputmode="numeric" value="${t.energy}"></div>
- <div class="trackBox"><label>Muskelkater 1–5</label><input id="trSoreness" inputmode="numeric" value="${t.soreness}"></div>
- <div class="trackBox"><label>Stress 1–5</label><input id="trStress" inputmode="numeric" value="${t.stress}"></div>
- <div class="trackBox"><label>Ruhepuls</label><input id="trRhr" inputmode="numeric" value="${t.rhr}"></div>
- <div class="trackBox"><label>Schritte</label><input id="trSteps" inputmode="numeric" value="${t.steps}"></div>
- <div class="trackBox"><label>Wasser (L)</label><input id="trWater" inputmode="decimal" value="${t.water}"></div></div>
- <button class="primary" style="margin-top:10px" onclick="saveDailyTracker()">Check-in speichern</button></div>
- <div class="card science"><div class="title">Wissenschaftliche Leitplanken</div><div class="sub">Muskelaufbau bleibt Priorität; Ausdauer und Mobility ergänzen ihn.</div>
- <div class="pillrow" style="margin-top:10px"><span class="pill">4× Kraft</span><span class="pill">2× Zone 2</span><span class="pill">0–1× Intervalle</span><span class="pill">Mobility 10–15 min</span></div>
- <div class="sub" style="margin-top:10px">Kraft: jede Muskelgruppe ungefähr 2× pro Trainingszyklus, progressive Überlastung, überwiegend 1–3 RIR und volle kontrollierte ROM. Cardio möglichst nicht direkt vor schweren Beineinheiten; harte Intervalle sparsam. Mobility kurz und häufig.</div></div>`;
+ home.innerHTML=`<div class="card hero"><div class="row"><div class="sub">${fmt(d)}</div><span class="badge ${effectiveCls(eff)}">${effectiveShiftName(eff)}</span></div><div class="big">${rec.main}</div><div class="sub">${rec.extra}</div><div class="sub" style="margin-top:7px">${coachSummary()}</div>${keys().includes(rec.main)?`<button class="primary" style="margin-top:13px" onclick="quickStart('${rec.main}')">Training starten</button>`:""}<div class="quick"><button onclick="document.getElementById('morningCard').scrollIntoView({behavior:'smooth'})"><b>Morgen</b><span>${t.morningDone?"✓ erledigt":"Check-in"}</span></button><button onclick="document.getElementById('eveningCard').scrollIntoView({behavior:'smooth'})"><b>Abend</b><span>${t.eveningDone?"✓ erledigt":"Tagesabschluss"}</span></button><button onclick="showPage('progressPage')"><b>Gewicht</b><span>${latest?latest.weight+" kg":"noch leer"}</span></button><button onclick="openCardio()"><b>Cardio</b><span>${lastC?lastC.type:"eintragen"}</span></button></div></div>
+ <div class="card" id="morningCard">
+   <div class="row"><div><div class="title">Morgen-Check-in</div><div class="sub">Direkt nach dem Aufstehen · steuert den Tagesplan</div></div><span class="badge ${t.morningDone?"off":""}">${t.morningDone?"erledigt":"offen"}</span></div>
+   <div class="trackerGrid">
+    <div class="trackBox"><label>Schlaf (h)</label><input id="mSleep" inputmode="decimal" value="${t.sleep}"></div>
+    <div class="trackBox"><label>Schlafqualität 1–5</label><input id="mQuality" inputmode="numeric" value="${t.quality}"></div>
+    <div class="trackBox"><label>Energie 1–5</label><input id="mEnergy" inputmode="numeric" value="${t.energy}"></div>
+    <div class="trackBox"><label>Muskelkater 1–5</label><input id="mSoreness" inputmode="numeric" value="${t.soreness}"></div>
+    <div class="trackBox"><label>Stress 1–5</label><input id="mStress" inputmode="numeric" value="${t.stress}"></div>
+    <div class="trackBox"><label>Ruhepuls</label><input id="mRhr" inputmode="numeric" value="${t.rhr}"></div>
+   </div>
+   <button class="primary" style="margin-top:10px" onclick="saveMorningCheckin()">Morgen-Check-in speichern</button>
+   <div class="sub" style="margin-top:8px">7-Tage-Schlafmittel: ${avg?avg.toFixed(1)+" h":"noch zu wenig Daten"}</div>
+ </div>
+ <div class="card" id="eveningCard">
+   <div class="row"><div><div class="title">Tagesabschluss</div><div class="sub">Vor dem Schlafen · dokumentiert den tatsächlichen Tag</div></div><span class="badge ${t.eveningDone?"off":""}">${t.eveningDone?"erledigt":"offen"}</span></div>
+   <div class="trackerGrid">
+    <div class="trackBox"><label>Schritte</label><input id="eSteps" inputmode="numeric" value="${t.steps}"></div>
+    <div class="trackBox"><label>Wasser (L)</label><input id="eWater" inputmode="decimal" value="${t.water}"></div>
+    <div class="trackBox"><label>Tagesbelastung 1–5</label><input id="eDayLoad" inputmode="numeric" value="${t.dayLoad}"></div>
+    <div class="trackBox"><label>Notiz</label><input id="eNote" value="${t.eveningNote}"></div>
+   </div>
+   <button class="secondary" style="margin-top:10px" onclick="saveEveningCheckin()">Tagesabschluss speichern</button>
+ </div>
+ <div class="card science"><div class="title">Warum getrennt?</div><div class="sub">Der Morgen-Check-in entscheidet, wie belastbar du heute bist. Schritte, Wasser und die tatsächliche Tagesbelastung sind erst am Abend sinnvoll und beeinflussen eher die Planung der nächsten Tage.</div></div>`;
 }
 function newSession(name){
  return {name,start:Date.now(),exercises:(workouts[name]||[]).map(item=>{
