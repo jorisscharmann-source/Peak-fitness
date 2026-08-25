@@ -112,6 +112,13 @@ button,input,select,textarea{max-width:100%;min-width:0}
 .planEditCard{border:1px solid var(--line);background:var(--surface2);border-radius:15px;padding:12px;margin-top:9px}
 .editorActions{display:flex;gap:6px;flex-wrap:wrap;margin-top:7px}
 @media(max-width:360px){.actionGrid{grid-template-columns:1fr}}
+
+.liveActions{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+.dayHistory{display:flex;gap:6px;overflow:auto;padding-bottom:4px;margin-top:8px}
+.dayChip{flex:0 0 auto;border:1px solid var(--line);background:var(--surface2);color:var(--text);border-radius:12px;padding:8px 10px;font-size:11px}
+.dayChip.active{outline:2px solid var(--accent)}
+.reasonBox{border-left:3px solid var(--accent);background:#10151d;border-radius:0 12px 12px 0;padding:10px;margin-top:8px}
+.reasonBox b{display:block;font-size:12px}.reasonBox span{font-size:11px;color:var(--muted)}
 </style>
 </head>
 <body>
@@ -124,7 +131,7 @@ button,input,select,textarea{max-width:100%;min-width:0}
         <div class="privacyNote">Die Datei wird nicht zu GitHub hochgeladen und nicht automatisch versendet. Bewahre sie nur in deiner Dateien-App bzw. einem privaten Backup auf.</div>
       </div>
     </div></div>
-    <div class="app"><div class="header"><div class="brand"><div class="logo">🏋️</div><div><h1>Peak Fitness</h1><div class="kicker">Hypertrophy-first Hybrid · v10.5</div></div></div></div>
+    <div class="app"><div class="header"><div class="brand"><div class="logo">🏋️</div><div><h1>Peak Fitness</h1><div class="kicker">Hypertrophy-first Hybrid · v10.6</div></div></div></div>
 <section id="home" class="section active"></section><section id="workout" class="section"></section><section id="calendar" class="section"></section><section id="progressPage" class="section"></section><section id="coach" class="section"></section><section id="more" class="section"></section></div>
 <div class="bottomnav"><div class="bottominner"><button class="navbtn active" data-page="home"><span class="ico">⌂</span>Heute</button><button class="navbtn" data-page="workout"><span class="ico">●</span>Training</button><button class="navbtn" data-page="calendar"><span class="ico">▦</span>Plan</button><button class="navbtn" data-page="progressPage"><span class="ico">↗</span>Fortschritt</button><button class="navbtn" data-page="coach"><span class="ico">✦</span>Coach</button></div></div>
 <div id="finishModal" class="modal"><div class="sheet"><div class="title">Training abschließen</div><div class="card soft"><div class="metric"><span>Dauer</span><strong id="finishDuration">–</strong></div><div class="metric"><span>Sätze</span><strong id="finishSets">–</strong></div><div class="metric"><span>Volumen</span><strong id="finishVolume">–</strong></div></div><label>Notiz</label><textarea id="sessionNote"></textarea><button class="primary" id="confirmFinish" style="margin-top:10px">Speichern & beenden</button><button class="secondary" id="cancelFinish" style="margin-top:7px">Zurück</button></div></div>
@@ -146,394 +153,42 @@ function shift(d){
 function histories(){return JSON.parse(localStorage.getItem("pf_history")||"[]")}function saveHist(x){localStorage.setItem("pf_history",JSON.stringify(x))}function cardioHist(){return JSON.parse(localStorage.getItem("pf_cardio")||"[]")}function saveCardio(x){localStorage.setItem("pf_cardio",JSON.stringify(x))}function bodyHist(){return JSON.parse(localStorage.getItem("pf_body")||"[]")}function saveBody(x){localStorage.setItem("pf_body",JSON.stringify(x))}function vacations(){return JSON.parse(localStorage.getItem("pf_vacations")||"[]")}function isVacation(d){const x=iso(d);return vacations().some(v=>x>=v.start&&x<=v.end)}function effectiveShift(d){return isVacation(d)?"U":shift(d)}function effectiveShiftName(s){return s==="U"?"Urlaub":shiftName(s)}function shortShiftName(s){return s==="U"?"Urlaub":s==="T"?"Tag":s==="N"?"Nacht":"Frei"}function effectiveCls(s){return s==="U"?"vac":cls(s)}function mobilityLog(){return JSON.parse(localStorage.getItem("pf_mobility")||"{}")}function saveMobility(x){localStorage.setItem("pf_mobility",JSON.stringify(x))}
 const moves=[["90/90 Hip Switches","60 s"],["Hüftbeuger","45 s/S."],["Tiefe Hocke","60 s"],["Hamstrings","45 s/S."],["Adduktoren","60 s"],["Knee-to-Wall","45 s/S."],["Brust/Schulter","45 s/S."],["Lat-Stretch","45 s/S."]];function keys(){return Object.keys(workouts||{})}function mobilityDoneToday(){return (mobilityLog()[iso(new Date())]||[]).filter(Boolean).length}
 function lastForExercise(n){const h=histories();for(let i=h.length-1;i>=0;i--){const e=(h[i].exercises||[]).find(x=>x.name===n);if(e){const g=(e.sets||[]).filter(s=>s.done&&(+s.weight>0||+s.reps>0));if(g.length)return g[g.length-1]}}return null}function progressionFor(n){const p=lastForExercise(n);if(!p)return"Startwert finden";const w=+p.weight||0,r=+p.reps||0;if(!w)return"Sauber steigern";if(r>=10)return`${Math.round((w+2.5)*2)/2} kg anpeilen`;return`${w} kg × ${r+1} anpeilen`}
-function planForDate(d){const start=shiftAnchor(); if(!start)return null; const target=dateOnly(d);if(target<start)return null;let c=0,x=new Date(start);while(x<=target){if(shift(x)==="F"){if(iso(x)===iso(target))return keys()[c%keys().length];c++}x.setDate(x.getDate()+1)}return null}function recommendation(d){const vac=isVacation(d),s=shift(d),p=planForDate(d);if(vac)return{main:p||keys()[Math.abs(dd(d,shiftAnchor()||d))%keys().length],extra:"Urlaub · nach Erholung trainieren"};if(s==="F"&&p)return{main:p,extra:["Upper A","Upper B"].includes(p)?"Optional: Stairmaster Zone 2":"Mobility 10–15 min"};if(s==="T")return{main:"Schichttag",extra:"Mobility · optional leichtes Zone 2"};return{main:"Regeneration",extra:"Schlaf priorisieren"}}
-
-
-
-function hasPrivateSetup(){const c=privateConfig();return !!(c&&c.workouts&&c.shift&&Array.isArray(c.shift.cycle))}
-function showSetupIfNeeded(){
-  const el=document.getElementById("setupOverlay");
-  if(!hasPrivateSetup()){el.classList.add("show")}else{el.classList.remove("show")}
+function planForDate(d){const start=shiftAnchor(); if(!start)return null; const target=dateOnly(d);if(target<start)return null;let c=0,x=new Date(start);while(x<=target){if(shift(x)==="F"){if(iso(x)===iso(target))return keys()[c%keys().length];c++}x.setDate(x.getDate()+1)}return null}
+function completedGymSessions(){return histories().filter(x=>keys().includes(x.name)).sort((a,b)=>new Date(a.date)-new Date(b.date))}
+function splitType(name){const n=(name||"").toLowerCase();if(n.includes("upper")||n.includes("ober"))return "upper";if(n.includes("lower")||n.includes("bein"))return "lower";return "other"}
+function nextGymInSequence(){
+ const order=["Upper A","Lower A","Upper B","Lower B"],h=completedGymSessions();
+ if(!h.length)return order[0];
+ const i=order.indexOf(h[h.length-1].name);return i>=0?order[(i+1)%order.length]:order[0];
 }
-window.importPrivateSetup=()=>{
-  const inp=document.createElement("input"); inp.type="file"; inp.accept=".json,application/json";
-  inp.onchange=()=>{
-    const f=inp.files[0]; if(!f)return;
-    const r=new FileReader();
-    r.onload=()=>{
-      try{
-        const d=JSON.parse(r.result);
-        if(!d.workouts||!d.shift||!Array.isArray(d.shift.cycle)||!d.shift.anchor)throw new Error("invalid");
-        localStorage.setItem("pf_private_config",JSON.stringify(d));
-        localStorage.setItem("pf_workouts",JSON.stringify(d.workouts));
-        workouts=d.workouts;
-        awardXP(25,"private_setup");
-        showSetupIfNeeded(); location.reload();
-      }catch(e){alert("Diese Setup-Datei ist ungültig.")}
-    };
-    r.readAsText(f);
-  };
-  inp.click();
+function hoursSinceLastType(type){
+ const h=completedGymSessions().filter(x=>splitType(x.name)===type);
+ if(!h.length)return 999;
+ return (Date.now()-new Date(h[h.length-1].date).getTime())/3600000;
+}
+function recommendedGym(){
+ const next=nextGymInSequence(),type=splitType(next),hours=hoursSinceLastType(type);
+ if(hours>=42)return {name:next,reason:`Reihenfolge passt · ${type==="upper"?"Oberkörper":"Beine"} seit ${Math.round(hours)} h nicht trainiert`};
+ const alt=type==="upper"?"lower":"upper",altHours=hoursSinceLastType(alt);
+ if(altHours>=42){
+   const altName=alt==="upper"?"Upper B":"Lower B";
+   return {name:altName,reason:`${type==="upper"?"Oberkörper":"Beine"} erst vor ${Math.round(hours)} h trainiert · andere Hälfte ist erholt`};
+ }
+ return {name:"Recovery / Zone 2",reason:"Weder Oberkörper noch Beine haben genug Erholung erreicht"};
 }
 
-
-
-function exerciseRules(){return privateConfig()?.exerciseRules||{}}
-function ruleFor(name){return exerciseRules()[name]||{sets:2,minReps:8,maxReps:12,rirMin:1,rirMax:3,rest:120,increment:2.5,primary:["Muskel"],secondary:[],kind:"generic"}}
-function muscleVolumes(){
- const totals={};
- Object.entries(workouts||{}).forEach(([day,items])=>{
-   items.forEach(item=>{
-     const name=Array.isArray(item)?item[0]:item.name;
-     const r=ruleFor(name);
-     (r.primary||[]).forEach(m=>totals[m]=(totals[m]||0)+(r.sets||2));
-     (r.secondary||[]).forEach(m=>totals[m]=(totals[m]||0)+Math.round((r.sets||2)*0.5*10)/10);
-   });
- });
- return totals;
+function recommendation(d){
+ const s=shift(d),g=recommendedGym();
+ if(isVacation(d)||s==="F")return {main:g.name,extra:g.reason};
+ if(s==="T")return {main:"Schichttag",extra:"Mobility · optional leichtes Zone 2"};
+ return {main:"Regeneration",extra:"Schlaf priorisieren"};
 }
-function exerciseVisual(rule){
- const stroke="#d8e9f7",accent="#61b8f2",muted="#6b7d91";
- const k=rule.kind||"generic";
- let body='';
- if(k==="press") body=`<circle cx="28" cy="16" r="4" fill="${stroke}"/><path d="M28 20v15M20 27l8-4 8 4M22 47l6-12 6 12" stroke="${stroke}" stroke-width="3" fill="none" stroke-linecap="round"/><path d="M12 24h32M15 20v8M41 20v8" stroke="${accent}" stroke-width="3" stroke-linecap="round"/>`;
- else if(k==="pull") body=`<circle cx="28" cy="18" r="4" fill="${stroke}"/><path d="M28 22v14M20 27l8 7 8-7M22 48l6-12 6 12" stroke="${stroke}" stroke-width="3" fill="none" stroke-linecap="round"/><path d="M14 10h28M18 10l4 14M38 10l-4 14" stroke="${accent}" stroke-width="3" stroke-linecap="round"/>`;
- else if(k==="row") body=`<circle cx="20" cy="18" r="4" fill="${stroke}"/><path d="M22 22l10 8M30 29l10-2M20 23l-6 18M31 30l-4 17" stroke="${stroke}" stroke-width="3" fill="none" stroke-linecap="round"/><path d="M40 22v12" stroke="${accent}" stroke-width="5" stroke-linecap="round"/>`;
- else if(k==="squat") body=`<circle cx="28" cy="13" r="4" fill="${stroke}"/><path d="M28 17v14M18 23h20M28 31l-8 11 11 6M28 31l9 9" stroke="${stroke}" stroke-width="3" fill="none" stroke-linecap="round"/><path d="M14 20h28" stroke="${accent}" stroke-width="4" stroke-linecap="round"/>`;
- else if(k==="hinge") body=`<circle cx="21" cy="17" r="4" fill="${stroke}"/><path d="M23 21l12 10M34 31l-6 17M34 31l11 16M22 22l-5 20" stroke="${stroke}" stroke-width="3" fill="none" stroke-linecap="round"/><path d="M13 43h34" stroke="${accent}" stroke-width="4" stroke-linecap="round"/>`;
- else if(k==="legs") body=`<circle cx="20" cy="17" r="4" fill="${stroke}"/><path d="M20 21v13M16 34h18M25 34l9 12M34 34l12-2" stroke="${stroke}" stroke-width="3" fill="none" stroke-linecap="round"/><circle cx="47" cy="32" r="5" fill="none" stroke="${accent}" stroke-width="3"/>`;
- else if(k==="isolation") body=`<circle cx="28" cy="14" r="4" fill="${stroke}"/><path d="M28 18v18M20 25l8 5 8-5M22 48l6-12 6 12" stroke="${stroke}" stroke-width="3" fill="none" stroke-linecap="round"/><circle cx="16" cy="27" r="5" fill="none" stroke="${accent}" stroke-width="3"/><circle cx="40" cy="27" r="5" fill="none" stroke="${accent}" stroke-width="3"/>`;
- else if(k==="core") body=`<circle cx="28" cy="14" r="4" fill="${stroke}"/><path d="M28 18v21M18 24h20M21 49l7-10 7 10" stroke="${stroke}" stroke-width="3" fill="none" stroke-linecap="round"/><rect x="23" y="24" width="10" height="13" rx="3" fill="${accent}" opacity=".7"/>`;
- else body=`<circle cx="28" cy="15" r="4" fill="${stroke}"/><path d="M28 19v18M18 25h20M22 49l6-12 6 12" stroke="${stroke}" stroke-width="3" fill="none" stroke-linecap="round"/>`;
- return `<svg viewBox="0 0 56 56" aria-hidden="true">${body}</svg>`;
-}
-function nextSetSuggestion(name){
- const p=lastForExercise(name),r=ruleFor(name); if(!p)return `${r.minReps}–${r.maxReps} Wdh. bei ${r.rirMin}–${r.rirMax} RIR`;
- const w=+p.weight||0,reps=+p.reps||0,rir=parseInt(p.rir)||2;
- if(reps>=r.maxReps && rir>=r.rirMin)return `${Math.round((w+r.increment)*2)/2} kg · ${r.minReps} Wdh.`;
- if(reps<r.minReps && rir<=1)return `${Math.max(0,Math.round((w-r.increment)*2)/2)} kg · Technik priorisieren`;
- return `${w} kg · ${Math.min(r.maxReps,reps+1)} Wdh.`;
-}
-
-
-function mobilityToday(){
- const l=mobilityLog(),k=iso(new Date());return l[k]||Array(moves.length).fill(false);
-}
-window.toggleMobilityToday=(i)=>{
- const l=mobilityLog(),k=iso(new Date()),a=l[k]||Array(moves.length).fill(false);
- a[i]=!a[i];l[k]=a;saveMobility(l);if(a.filter(Boolean).length===moves.length)awardXP(35,"mobility_full_"+k);
- renderHome();renderCoach();
-}
-function mobilityCardHtml(){
- const a=mobilityToday();
- return `<div class="card mobility"><div class="row"><div><div class="title">Mobility heute</div><div class="sub">${a.filter(Boolean).length}/${moves.length} Übungen erledigt</div></div><span class="badge ${a.filter(Boolean).length===moves.length?"off":""}">${a.filter(Boolean).length===moves.length?"✓ komplett":"offen"}</span></div>
- ${moves.map((x,i)=>`<div class="move"><button class="check ${a[i]?"on":""}" onclick="toggleMobilityToday(${i})">${a[i]?"✓":""}</button><span>${x[0]}</span><strong>${x[1]}</strong></div>`).join("")}</div>`;
-}
-
-function dailyLogs(){return JSON.parse(localStorage.getItem("pf_daily_logs")||"{}")}
-function saveDailyLogs(x){localStorage.setItem("pf_daily_logs",JSON.stringify(x))}
-function todayLog(){
- const r=readiness(),x=dailyLogs()[iso(new Date())]||{};
- return {
-   sleep:x.sleep??r.sleep,quality:x.quality??3,energy:x.energy??r.energy,
-   soreness:x.soreness??r.soreness,stress:x.stress??r.stress,rhr:x.rhr??"",
-   steps:x.steps??"",water:x.water??"",dayLoad:x.dayLoad??3,eveningNote:x.eveningNote??"",
-   morningDone:!!x.morningDone,eveningDone:!!x.eveningDone
- };
-}
-window.saveMorningCheckin=()=>{
- const logs=dailyLogs(),k=iso(new Date()),old=logs[k]||{};
- logs[k]={...old,sleep:+mSleep.value||0,quality:+mQuality.value||3,energy:+mEnergy.value||3,soreness:+mSoreness.value||2,stress:+mStress.value||2,rhr:+mRhr.value||0,morningDone:true};
- saveDailyLogs(logs);
- saveReadinessData({sleep:logs[k].sleep,energy:logs[k].energy,soreness:logs[k].soreness,stress:logs[k].stress});
- awardXP(15,"morning_"+k);renderHome();renderCoach();
-}
-window.saveEveningCheckin=()=>{
- const logs=dailyLogs(),k=iso(new Date()),old=logs[k]||{};
- logs[k]={...old,steps:+eSteps.value||0,water:+eWater.value||0,dayLoad:+eDayLoad.value||3,eveningNote:eNote.value||"",eveningDone:true};
- saveDailyLogs(logs);awardXP(10,"evening_"+k);renderHome();
-}
-function sleep7(){
- const logs=dailyLogs(),arr=[];for(let i=6;i>=0;i--){const d=new Date();d.setDate(d.getDate()-i);const x=logs[iso(d)];if(x?.sleep)arr.push(x.sleep)}
- return arr.length?(arr.reduce((a,b)=>a+b,0)/arr.length):0
-}
-
-function nutrition(){return JSON.parse(localStorage.getItem("pf_nutrition")||'{"calories":2600,"protein":180,"goal":"maintain"}')}
-function saveNutrition(x){localStorage.setItem("pf_nutrition",JSON.stringify(x))}
-function fitnessTests(){return JSON.parse(localStorage.getItem("pf_tests")||"[]")}
-function saveTests(x){localStorage.setItem("pf_tests",JSON.stringify(x))}
-function mobilityTests(){return JSON.parse(localStorage.getItem("pf_mob_tests")||'{"ankle":3,"squat":3,"hip":3,"shoulder":3}')}
-function saveMobTests(x){localStorage.setItem("pf_mob_tests",JSON.stringify(x))}
-function weeklyReviews(){return JSON.parse(localStorage.getItem("pf_weekly_reviews")||"[]")}
-function saveWeeklyReviews(x){localStorage.setItem("pf_weekly_reviews",JSON.stringify(x))}
-function gamify(){return JSON.parse(localStorage.getItem("pf_game")||'{"xp":0,"streak":0,"lastActive":"","badges":[]}')}
-function saveGamify(x){localStorage.setItem("pf_game",JSON.stringify(x))}
-function levelInfo(){
-  const g=gamify(), level=Math.floor(g.xp/500)+1, inLevel=g.xp%500;
-  return {level,xp:g.xp,inLevel,need:500,progress:Math.round(inLevel/500*100),streak:g.streak,badges:g.badges||[]};
-}
-function awardXP(amount, badge){
-  const g=gamify(), today=iso(new Date());
-  if(g.lastActive!==today){
-    const y=new Date(); y.setDate(y.getDate()-1);
-    g.streak=(g.lastActive===iso(y))?(g.streak||0)+1:1;
-    g.lastActive=today;
-  }
-  g.xp=(g.xp||0)+amount;
-  if(badge && !g.badges.includes(badge)) g.badges.push(badge);
-  saveGamify(g);
-}
-function prMap(){
-  const map={};
-  histories().forEach(s=>s.exercises?.forEach(e=>e.sets?.forEach(x=>{
-    if(!x.done)return;
-    const w=+x.weight||0,r=+x.reps||0, score=w*(1+r/30);
-    if(!map[e.name]||score>map[e.name].score)map[e.name]={weight:w,reps:r,score,date:s.date};
-  })));
-  return map;
-}
-function loadScore(){
-  const r=readiness(), h=histories(), c=cardioHist(), last7=new Date();last7.setDate(last7.getDate()-7);
-  const gym7=h.filter(x=>new Date(x.date)>=last7).length;
-  const cardio7=c.filter(x=>new Date(x.date)>=last7).length;
-  const fatigue=Math.max(0,Math.min(100,100-((r.sleep<6?25:0)+(r.energy<=2?25:0)+(r.soreness>=4?25:0)+(r.stress>=4?25:0))));
-  return {gym7,cardio7,fatigue};
-}
-function peakFitnessScore(){
- const h=histories(),c=cardioHist(),m=mobilityTests(),r=readiness(),last28=new Date();last28.setDate(last28.getDate()-28);
- const gym28=h.filter(x=>new Date(x.date)>=last28).length,cardio28=c.filter(x=>new Date(x.date)>=last28).length;
- const consistency=Math.min(100,Math.round(gym28/16*100)),endurance=Math.min(100,Math.round(cardio28/8*100));
- const mobility=Math.max(0,Math.min(100,Math.round(((m.ankle+m.squat+m.hip+m.shoulder-4)/16)*100)));
- const recovery=Math.max(0,Math.min(100,Math.round((r.sleep/8)*40+(r.energy/5)*25+((6-r.soreness)/5)*20+((6-r.stress)/5)*15)));
- return {strength:consistency,endurance,work:recovery,mobility,overall:Math.round(consistency*.35+endurance*.25+mobility*.15+recovery*.25)};
-}
-function recentLoad(){
-  const now=new Date(), start=new Date(); start.setDate(now.getDate()-7);
-  const gym=histories().filter(x=>new Date(x.date)>=start).reduce((a,x)=>a+(+x.volume||0),0);
-  const cardio=cardioHist().filter(x=>new Date(x.date)>=start).reduce((a,x)=>a+(+x.minutes||0),0);
-  return {gym,cardio};
-}
-function weeklySummaryData(){
-  const now=new Date(), day=(now.getDay()+6)%7, monday=new Date(now);monday.setDate(now.getDate()-day);monday.setHours(0,0,0,0);
-  const h=histories().filter(x=>new Date(x.date)>=monday), c=cardioHist().filter(x=>new Date(x.date)>=monday);
-  const m=mobilityLog();let mob=0;for(let i=0;i<7;i++){const d=new Date(monday);d.setDate(monday.getDate()+i);if((m[iso(d)]||[]).filter(Boolean).length>=4)mob++}
-  const body=bodyHist().filter(x=>x.date>=iso(monday)), delta=body.length>=2?(body[body.length-1].weight-body[0].weight):null;
-  return {gym:h.length,cardio:c.length,mob,delta,volume:h.reduce((a,x)=>a+(+x.volume||0),0)};
-}
-function nutritionAdvice(){
-  const n=nutrition(), b=bodyHist().slice(-6);
-  if(b.length<3)return "Noch zu wenig Gewichtsdaten für eine Kalorien-Anpassung.";
-  const delta=b[b.length-1].weight-b[0].weight;
-  if(n.goal==="cut" && delta>-0.2)return "Gewicht sinkt kaum: Kalorien ggf. um 100–150 kcal reduzieren.";
-  if(n.goal==="gain" && delta<0.1)return "Gewicht steigt kaum: Kalorien ggf. um 100–150 kcal erhöhen.";
-  if(n.goal==="maintain" && Math.abs(delta)>1)return "Gewicht schwankt deutlich: Kalorien/Alltag prüfen.";
-  return "Gewichtstrend passt aktuell zum gewählten Ziel.";
-}
-
-function readiness(){
-  return JSON.parse(localStorage.getItem("pf_readiness")||'{"sleep":7,"energy":3,"soreness":2,"stress":2}');
-}
-function saveReadinessData(x){localStorage.setItem("pf_readiness",JSON.stringify(x))}
-function completedThisWeek(){
-  const now=new Date(), day=(now.getDay()+6)%7;
-  const monday=new Date(now); monday.setDate(now.getDate()-day); monday.setHours(0,0,0,0);
-  return histories().filter(x=>new Date(x.date)>=monday).map(x=>x.name);
-}
-function adaptiveWeek(){
-  const r=readiness(), today=new Date(), result=[], deload=fatigueTrend().deload;
-  const gymQueue=["Upper A","Lower A","Upper B","Lower B"];
-  let gymIndex=0, cardioHard=0, cardioEasy=0;
-  const readinessScore=(r.sleep>=7?1:0)+(r.energy>=3?1:0)+(r.soreness<=2?1:0)+(r.stress<=2?1:0);
-  for(let i=0;i<7;i++){
-    const d=new Date(today);d.setDate(today.getDate()+i);const sh=effectiveShift(d);
-    let plan="Mobility + Erholung",note="10–15 min Mobility";
-    const free=sh==="F"||sh==="U";
-    const canGym=free && gymIndex<4;
-    if(canGym){
-      plan=gymQueue[gymIndex++];
-      note=deload?"Deload · 50–70 % Volumen · 3–4 RIR":"Hypertrophie · 6–15 Wdh. · meist 1–3 RIR";
-    } else if(cardioEasy<2 && (free || sh==="T")){
-      plan="Zone 2";
-      note="30–45 min · locker, Gespräch möglich";cardioEasy++;
-    } else if(!deload && cardioHard<1 && free && gymIndex>=2){
-      plan="Intervalle";
-      note="6×1–2 min hart / 2 min locker";cardioHard++;
-    } else if(sh==="N"){
-      plan="Mobility + Spaziergang";
-      note="Regeneration priorisieren";
-    }
-    if(readinessScore<=1 && (plan.includes("Lower")||plan==="Intervalle")){
-      plan="Zone 2 / Mobility";note="Belastung wegen niedriger Readiness reduziert";
-    }
-    result.push({date:d,plan,note});
-  }
-  return result;
-}
-
-function fatigueTrend(){
- const h=histories().slice(-8),logs=dailyLogs();let lowDays=0;
- for(let i=0;i<5;i++){const d=new Date();d.setDate(d.getDate()-i);const x=logs[iso(d)];if(x&&((x.energy||3)<=2||(x.soreness||2)>=4||(x.sleep||7)<6))lowDays++}
- let performanceDrop=0;if(h.length>=4){const recent=h.slice(-2).reduce((a,x)=>a+(+x.volume||0),0)/2,prior=h.slice(-4,-2).reduce((a,x)=>a+(+x.volume||0),0)/2;if(prior>0&&recent<prior*.85)performanceDrop=1}
- return {lowDays,performanceDrop,deload:lowDays>=3||performanceDrop===1};
-}
-function deloadAdvice(){const f=fatigueTrend();if(f.deload)return "Deload empfohlen: 5–7 Tage 30–50 % weniger Sätze und keine harten Intervalle.";if(f.lowDays>=2)return "Ermüdung steigt: nächste harte Einheit konservativ planen.";return "Belastung wirkt aktuell gut verträglich.";}
-
-function coachSummary(){
-  const tl=todayLog();
-  const r=readiness(), done=completedThisWeek();
-  let msg="Diese Woche: "+done.length+" Gym-Einheiten erledigt. ";
-  if(r.sleep<6) msg+="Schlaf ist aktuell der größte Engpass. ";
-  else if(r.energy<=2) msg+="Energie ist niedrig; Volumen eher halten oder reduzieren. ";
-  else if(r.soreness>=4) msg+="Muskelkater ist hoch; keine harte Einheit für die betroffenen Bereiche erzwingen. ";
-  else msg+="Readiness sieht solide aus. ";
-  if(tl.eveningDone&&tl.dayLoad>=4)msg+=" Gestern/heute war die Tagesbelastung hoch; zusätzliche Intensität konservativ planen."; return msg;
-}
-function coachPrompt(){
-  const r=readiness(), ps=peakFitnessScore(), n=nutrition(), week=adaptiveWeek().map(x=>`${fmt(x.date,{weekday:"short",day:"2-digit",month:"2-digit"})}: ${x.plan} (${x.note})`).join("\n");
-  return `Ich nutze eine persönliche Fitness-App. Bitte bewerte meinen aktuellen Plan und passe ihn sinnvoll an.
-
-Schichtrhythmus: 28-Tage-Wechselschicht.
-Aktuelle Readiness:
-- Schlaf: ${r.sleep} h
-- Energie: ${r.energy}/5
-- Muskelkater: ${r.soreness}/5
-- Stress: ${r.stress}/5
-
-Diese Woche erledigte Gym-Einheiten: ${completedThisWeek().join(", ")||"keine"}
-
-Aktueller Wochenvorschlag:
-${week}
-
-Peak-Fitness-Score: ${ps.overall}/100 (Kraft ${ps.strength}, Ausdauer ${ps.endurance}, Work Capacity ${ps.work}, Mobility ${ps.mobility}).\nErnährungsziel: ${n.goal}, ${n.calories} kcal, ${n.protein} g Protein.\n\nMein Ziel: sehr hohe Allround-Fitness mit Kraft, Ausdauer, Beweglichkeit und guter Regeneration.`;
-}
-window.askChatGPT=async()=>{
-  const p=coachPrompt();
-  try{await navigator.clipboard.writeText(p);}catch(e){}
-  window.open("https://chatgpt.com/","_blank");
-}
-window.saveReadiness=()=>{
-  const x={
-    sleep:+document.getElementById("rSleep").value||7,
-    energy:+document.getElementById("rEnergy").value||3,
-    soreness:+document.getElementById("rSoreness").value||2,
-    stress:+document.getElementById("rStress").value||2
-  };
-  saveReadinessData(x); renderCoach(); renderHome();
-}
-function renderCoach(){
-  const r=readiness(), week=adaptiveWeek(), s=peakFitnessScore(), g=levelInfo(), mob=mobilityTests(), n=nutrition(), sum=weeklySummaryData();
-  const badges=[
-    ["first_checkin","🧠","Erster Check-in"],
-    ["first_workout","🏋️","Erstes Training"],
-    ["cardio_logged","❤️","Cardio geloggt"],
-    ["mobility_full","🧘","Mobility komplett"],
-    ["score50","⚡","Score 50+"],
-    ["streak7","🔥","7 Tage Streak"]
-  ];
-  if(s.overall>=50&&!g.badges.includes("score50")){awardXP(100,"score50")}
-  if(g.streak>=7&&!g.badges.includes("streak7")){awardXP(150,"streak7")}
-  const gg=levelInfo();
-  coach.innerHTML=`
-  <div class="card hero">
-    <div class="row"><div><div class="title">Adaptive Coach</div><div class="sub">${coachSummary()}</div></div><div class="scoreRing" style="--score:${s.overall}"><strong>${s.overall}</strong></div></div>
-  </div>
-  <div class="card">
-    <div class="title">Peak-Fitness Score</div>
-    <div class="scoreGrid">
-      <div class="scoreCard"><b>${s.strength}</b><span>Kraft</span></div>
-      <div class="scoreCard"><b>${s.endurance}</b><span>Ausdauer</span></div>
-      <div class="scoreCard"><b>${s.work}</b><span>Work Capacity</span></div>
-      <div class="scoreCard"><b>${s.mobility}</b><span>Mobility</span></div>
-    </div>
-  </div>
-  <div class="card"><div class="row"><div><div class="title">Ermüdungsmanagement</div><div class="sub">Aus Schlaf, Muskelkater, Energie und Leistungsentwicklung.</div></div><span class="scienceTag">Auto</span></div><div class="${fatigueTrend().deload?"alert":"good"}">${deloadAdvice()}</div></div><div class="card">
-    <div class="title">Nächste 7 Tage</div>
-    ${week.map(x=>`<div class="metric"><span><b>${fmt(x.date,{weekday:"short",day:"2-digit",month:"2-digit"})}</b><div class="sub">${effectiveShiftName(x.shift)} · ${x.note}</div></span><strong>${x.plan}</strong></div>`).join("")}
-  </div>
-  <div class="card"><div class="title">Mobility-Test</div>
-    <div class="sub">1 = stark eingeschränkt · 5 = sehr gut</div>
-    ${[["ankle","Sprunggelenk"],["squat","Tiefe Hocke"],["hip","Hüfte"],["shoulder","Schulter"]].map(([k,l])=>`<div class="metric"><span>${l}</span><input id="m_${k}" style="width:70px" value="${mob[k]}" inputmode="numeric"></div>`).join("")}
-    <button class="secondary full" style="margin-top:8px" onclick="saveMobilityTest()">Mobility speichern</button>
-  </div>
-  <div class="card">
-    <div class="title">Wochenrückblick</div>
-    <div class="scoreGrid">
-      <div class="scoreCard"><b>${sum.gym}</b><span>Gym-Einheiten</span></div>
-      <div class="scoreCard"><b>${sum.cardio}</b><span>Cardio-Einheiten</span></div>
-      <div class="scoreCard"><b>${sum.mob}</b><span>Mobility-Tage</span></div>
-      <div class="scoreCard"><b>${sum.delta===null?"–":(sum.delta>0?"+":"")+sum.delta.toFixed(1)}</b><span>Gewicht Δ kg</span></div>
-    </div>
-    <button class="secondary full" style="margin-top:8px" onclick="saveWeeklyReview()">Woche abschließen + XP</button>
-  </div>
-  <div class="card">
-    <div class="title">Ernährung</div>
-    <div class="inline"><div><label>Kalorienziel</label><input id="nCal" value="${n.calories}" inputmode="numeric"></div><div><label>Protein g</label><input id="nPro" value="${n.protein}" inputmode="numeric"></div></div>
-    <label>Ziel</label><select id="nGoal"><option value="cut" ${n.goal==="cut"?"selected":""}>Cut</option><option value="maintain" ${n.goal==="maintain"?"selected":""}>Halten</option><option value="gain" ${n.goal==="gain"?"selected":""}>Aufbau</option></select>
-    <div class="good">${nutritionAdvice()}</div>
-    <button class="secondary full" style="margin-top:8px" onclick="saveNutritionForm()">Speichern</button>
-  </div>
-  <div class="card">
-    <div class="title">Achievements</div>
-    <div class="badgeGrid">${badges.map(([id,e,t])=>`<div class="achievement ${gg.badges.includes(id)?"":"locked"}"><div class="emoji">${e}</div><b>${t}</b></div>`).join("")}</div>
-  </div>
-  <div class="card">
-    <div class="row"><div><div class="title">Hypertrophie-Volumen</div><div class="sub">Direkte + 0,5× indirekte Arbeitssätze pro Mikrozyklus</div></div><span class="scienceTag">evidenzbasiert</span></div>
-    ${Object.entries(muscleVolumes()).map(([m,v])=>`<div class="volumeRow"><span>${m}<div class="volumeBar"><span style="width:${Math.min(100,v/16*100)}%"></span></div></span><strong>${v}</strong><span class="sub">Sätze</span></div>`).join("")}
-    <div class="planRule"><b>Progression</b><div>Erst Wiederholungen im Zielbereich erhöhen. Wenn alle Arbeitssätze oben im Bereich mit Ziel-RIR liegen, Gewicht erhöhen.</div></div>
-    <div class="planRule"><b>Cardio</b><div>2× Zone 2 à 30–45 min. Optional 1 kurze Intervall-Einheit; nicht unmittelbar vor einer schweren Lower-Einheit.</div></div>
-    <div class="planRule"><b>Mobility</b><div>10–15 min häufig; bei eingeschränkten Bereichen zusätzlich 2–3 Durchgänge à 30–60 s. Kraftübungen möglichst über kontrollierte volle ROM.</div></div>
-  </div>
-
-  <div class="card">
-    <div class="row"><div><div class="title">Einstellungen & Daten</div><div class="sub">Privates Setup, Backup und App-Einstellungen.</div></div><span class="scienceTag">v10.1</span></div>
-    <button class="primary full" style="margin-top:10px" onclick="importPrivateSetup()">🔐 Privates Setup importieren</button>
-    <button class="secondary full" style="margin-top:8px" onclick="exportData()">Backup exportieren</button>
-    <button class="secondary full" style="margin-top:8px" onclick="importData()">Backup importieren</button>
-    <button class="secondary full" style="margin-top:8px" onclick="showPage('more')">Weitere Einstellungen öffnen</button>
-    <div class="privacyNote">Das private Setup wird ausschließlich lokal auf diesem Gerät gespeichert und nicht automatisch zu GitHub übertragen.</div>
-  </div>
-  <div class="card">
-    <div class="title">Mit ChatGPT besprechen</div>
-    <div class="sub">Kopiert deinen aktuellen Fitness-Kontext und öffnet ChatGPT. Es wird nichts automatisch gesendet.</div>
-    <button class="secondary full" style="margin-top:9px" onclick="askChatGPT()">Frag ChatGPT</button>
-  </div>
-  <div class="card">
-    <div class="title">Native Features</div>
-    <div class="alert">Lockscreen-/Dynamic-Island-Pausentimer brauchen später eine echte iOS-App. Die PWA kann das nicht zuverlässig.</div>
-  </div>`;
-}
-window.saveMobilityTest=()=>{saveMobTests({ankle:+m_ankle.value||3,squat:+m_squat.value||3,hip:+m_hip.value||3,shoulder:+m_shoulder.value||3});awardXP(40,"mobility_test");renderCoach()}
-window.saveWeeklyReview=()=>{const a=weeklyReviews();a.push({date:iso(new Date()),...weeklySummaryData()});saveWeeklyReviews(a);awardXP(150,"weekly_review");renderCoach();renderHome()}
-window.saveNutritionForm=()=>{saveNutrition({calories:+nCal.value||2600,protein:+nPro.value||180,goal:nGoal.value});awardXP(20,"nutrition_set");renderCoach()}
-
-
 function renderHome(){
- const d=new Date(),eff=effectiveShift(d),rec=recommendation(d),latest=bodyHist().slice(-1)[0],lastC=cardioHist().slice(-1)[0],t=todayLog(),avg=sleep7();
- home.innerHTML=`<div class="card hero"><div class="row"><div class="sub">${fmt(d)}</div><span class="badge ${effectiveCls(eff)}">${effectiveShiftName(eff)}</span></div><div class="big">${rec.main}</div><div class="sub">${rec.extra}</div><div class="sub" style="margin-top:7px">${coachSummary()}</div>${keys().includes(rec.main)?`<button class="primary" style="margin-top:13px" onclick="quickStart('${rec.main}')">Training starten</button>`:""}<div class="quick"><button onclick="document.getElementById('morningCard').scrollIntoView({behavior:'smooth'})"><b>Morgen</b><span>${t.morningDone?"✓ erledigt":"Check-in"}</span></button><button onclick="document.getElementById('eveningCard').scrollIntoView({behavior:'smooth'})"><b>Abend</b><span>${t.eveningDone?"✓ erledigt":"Tagesabschluss"}</span></button><button onclick="showPage('progressPage')"><b>Gewicht</b><span>${latest?latest.weight+" kg":"noch leer"}</span></button><button onclick="document.getElementById('mobilityHome').scrollIntoView({behavior:'smooth'})"><b>Mobility</b><span>${mobilityToday().filter(Boolean).length}/${moves.length}</span></button></div></div>
- <div class="card" id="morningCard">
-   <div class="row"><div><div class="title">Morgen-Check-in</div><div class="sub">Direkt nach dem Aufstehen · steuert den Tagesplan</div></div><span class="badge ${t.morningDone?"off":""}">${t.morningDone?"erledigt":"offen"}</span></div>
-   <div class="trackerGrid">
-    <div class="trackBox"><label>Schlaf (h)</label><input id="mSleep" inputmode="decimal" value="${t.sleep}"></div>
-    <div class="trackBox"><label>Schlafqualität 1–5</label><input id="mQuality" inputmode="numeric" value="${t.quality}"></div>
-    <div class="trackBox"><label>Energie 1–5</label><input id="mEnergy" inputmode="numeric" value="${t.energy}"></div>
-    <div class="trackBox"><label>Muskelkater 1–5</label><input id="mSoreness" inputmode="numeric" value="${t.soreness}"></div>
-    <div class="trackBox"><label>Stress 1–5</label><input id="mStress" inputmode="numeric" value="${t.stress}"></div>
-    <div class="trackBox"><label>Ruhepuls</label><input id="mRhr" inputmode="numeric" value="${t.rhr}"></div>
-   </div>
-   <button class="primary" style="margin-top:10px" onclick="saveMorningCheckin()">Morgen-Check-in speichern</button>
-   <div class="sub" style="margin-top:8px">7-Tage-Schlafmittel: ${avg?avg.toFixed(1)+" h":"noch zu wenig Daten"}</div>
- </div>
- <div class="card" id="eveningCard">
-   <div class="row"><div><div class="title">Tagesabschluss</div><div class="sub">Vor dem Schlafen · dokumentiert den tatsächlichen Tag</div></div><span class="badge ${t.eveningDone?"off":""}">${t.eveningDone?"erledigt":"offen"}</span></div>
-   <div class="trackerGrid">
-    <div class="trackBox"><label>Schritte</label><input id="eSteps" inputmode="numeric" value="${t.steps}"></div>
-    <div class="trackBox"><label>Wasser (L)</label><input id="eWater" inputmode="decimal" value="${t.water}"></div>
-    <div class="trackBox"><label>Tagesbelastung 1–5</label><input id="eDayLoad" inputmode="numeric" value="${t.dayLoad}"></div>
-    <div class="trackBox"><label>Notiz</label><input id="eNote" value="${t.eveningNote}"></div>
-   </div>
-   <button class="secondary" style="margin-top:10px" onclick="saveEveningCheckin()">Tagesabschluss speichern</button>
- </div>
- <div id="mobilityHome">${mobilityCardHtml()}</div><div class="card science"><div class="title">Warum getrennt?</div><div class="sub">Der Morgen-Check-in entscheidet, wie belastbar du heute bist. Schritte, Wasser und die tatsächliche Tagesbelastung sind erst am Abend sinnvoll und beeinflussen eher die Planung der nächsten Tage.</div></div>`;
+ const now=new Date(),d=new Date(selectedLogDate+"T12:00:00"),isToday=selectedLogDate===iso(now),t=getLogForDate(selectedLogDate);
+ const rec=isToday?recommendation(d):{main:"Vergangener Tag",extra:"Einträge nachtragen oder korrigieren"};
+ home.innerHTML=`<div class="card hero"><div class="row"><div class="sub">${fmt(d)}</div><span class="badge ${effectiveCls(effectiveShift(d))}">${effectiveShiftName(effectiveShift(d))}</span></div><div class="big">${rec.main}</div><div class="sub">${rec.extra}</div>${isToday&&keys().includes(rec.main)?`<button class="primary" style="margin-top:13px" onclick="quickStart('${rec.main}')">Training starten</button>`:""}<div class="dayHistory">${recentLogDays().map(x=>`<button class="dayChip ${x===selectedLogDate?"active":""}" onclick="selectLogDate('${x}')">${fmt(new Date(x+"T12:00:00"),{weekday:"short",day:"2-digit"})}</button>`).join("")}</div></div>
+ <div class="card"><div class="title">${isToday?"Morgen-Check-in":"Morgen nachtragen"}</div><div class="trackerGrid"><div class="trackBox"><label>Schlaf (h)</label><input id="mSleep" value="${t.sleep}"></div><div class="trackBox"><label>Schlafqualität 1–5</label><input id="mQuality" value="${t.quality}"></div><div class="trackBox"><label>Energie 1–5</label><input id="mEnergy" value="${t.energy}"></div><div class="trackBox"><label>Muskelkater 1–5</label><input id="mSoreness" value="${t.soreness}"></div><div class="trackBox"><label>Stress 1–5</label><input id="mStress" value="${t.stress}"></div><div class="trackBox"><label>Ruhepuls</label><input id="mRhr" value="${t.rhr}"></div></div><button class="primary" style="margin-top:10px" onclick="saveHistoricalMorning()">Speichern</button></div>
+ <div class="card"><div class="title">${isToday?"Tagesabschluss":"Abend nachtragen"}</div><div class="trackerGrid"><div class="trackBox"><label>Schritte</label><input id="eSteps" value="${t.steps}"></div><div class="trackBox"><label>Wasser (L)</label><input id="eWater" value="${t.water}"></div><div class="trackBox"><label>Tagesbelastung 1–5</label><input id="eDayLoad" value="${t.dayLoad}"></div><div class="trackBox"><label>Notiz</label><input id="eNote" value="${t.eveningNote}"></div></div><button class="secondary" style="margin-top:10px" onclick="saveHistoricalEvening()">Speichern</button></div>${isToday?`<div id="mobilityHome">${mobilityCardHtml()}</div>`:""}`;
 }
 function newSession(name){
  return {name,start:Date.now(),exercises:(workouts[name]||[]).map(item=>{
@@ -564,10 +219,22 @@ window.addTrainingExercise=(plan)=>{const n=prompt("Name der Übung:");if(!n)ret
 window.removeTrainingExercise=(plan,i)=>{if(!confirm("Übung entfernen?"))return;workouts[plan].splice(i,1);saveWorkouts();renderWorkout();}
 window.moveTrainingExercise=(plan,i,d)=>{const a=workouts[plan],j=i+d;if(!a||j<0||j>=a.length)return;[a[i],a[j]]=[a[j],a[i]];saveWorkouts();renderWorkout();}
 
+
+window.liveAddExercise=()=>{
+ if(!session)return;const n=prompt("Übung hinzufügen:");if(!n)return;
+ const r=ruleFor(n);session.exercises.push({name:n,icon:"",rule:r,sets:Array.from({length:r.sets||2},()=>({weight:"",reps:"",rir:String(r.rirMax||2),done:false}))});renderWorkout();
+}
+window.liveReplaceExercise=i=>{
+ const n=prompt("Ersetzen durch:",session.exercises[i].name);if(!n)return;
+ const r=ruleFor(n);session.exercises[i]={name:n,icon:"",rule:r,sets:Array.from({length:r.sets||2},()=>({weight:"",reps:"",rir:String(r.rirMax||2),done:false}))};renderWorkout();
+}
+window.liveRemoveExercise=i=>{if(confirm("Übung aus dieser Einheit entfernen?")){session.exercises.splice(i,1);renderWorkout()}}
+window.liveMoveExercise=(i,d)=>{const j=i+d;if(j<0||j>=session.exercises.length)return;[session.exercises[i],session.exercises[j]]=[session.exercises[j],session.exercises[i]];renderWorkout()}
+
 function renderWorkout(){if(!session){
   workout.innerHTML=`<div class="card hero"><div class="row"><div><div class="title">Training</div><div class="sub">Plan auswählen oder direkt bearbeiten.</div></div><button class="mini" onclick="createTrainingPlan()">+ Neuer Plan</button></div>
   ${keys().length?keys().map(k=>`<button class="plan-btn" onclick="quickStart('${k}')"><div class="row"><div><b>${k}</b><div class="sub">${(workouts[k]||[]).length} Übungen</div></div><span>Start ›</span></div></button>`).join(""):`<div class="alert" style="margin-top:10px">Noch keine Trainingspläne vorhanden. Erstelle einen neuen Plan oder importiere dein privates Setup.</div>`}</div>${planEditorHtml()}`;
-  return}let done=0,total=0;session.exercises.forEach(e=>e.sets.forEach(s=>{total++;if(s.done)done++}));workout.innerHTML=`<div class="timerbar"><div class="row"><div><div class="sub">${session.name} · ${done}/${total} Sätze</div><div class="timer" id="restTimer">Bereit</div></div><button class="mini" onclick="addRest(30)">+30s</button></div><div class="progress"><span style="width:${total?done/total*100:0}%"></span></div></div>${session.exercises.map((e,ei)=>{const p=lastForExercise(e.name);return`<div class="exercise"><div class="exercise-head"><div class="exerciseVisual">${exerciseVisual(ruleFor(e.name))}</div><div><div class="ex-name">${e.name}</div><div class="prev">${p?`${p.weight||"–"} kg × ${p.reps||"–"} · RIR ${p.rir??"–"}`:"Noch kein Verlauf"}</div><div class="progression">${progressionFor(e.name)}</div><div class="muscleRow">${(ruleFor(e.name).primary||[]).map(m=>`<span class="musclePill">${m}</span>`).join("")}</div></div></div><div class="set-head"><span>#</span><span>kg</span><span>Wdh.</span><span>RIR</span><span></span></div>${e.sets.map((s,si)=>`<div class="setrow"><div class="setnum">${si+1}</div><input inputmode="decimal" value="${s.weight}" oninput="editSet(${ei},${si},'weight',this.value)"><input inputmode="numeric" value="${s.reps}" oninput="editSet(${ei},${si},'reps',this.value)"><select onchange="editSet(${ei},${si},'rir',this.value)">${["0","1","2","3","4+"].map(v=>`<option ${String(s.rir)===v?"selected":""}>${v}</option>`).join("")}</select><button class="done ${s.done?"on":""}" onclick="toggleSet(${ei},${si})">${s.done?"✓":"○"}</button></div>`).join("")}<div><button class="mini" onclick="addSet(${ei})">+ Satz</button> ${e.sets.length>1?`<button class="mini" onclick="removeSet(${ei})">− Satz</button>`:""}</div></div>`}).join("")}<button class="primary" onclick="openFinish()">Training abschließen</button>`;renderRestTimer()}
+  return}let done=0,total=0;session.exercises.forEach(e=>e.sets.forEach(s=>{total++;if(s.done)done++}));workout.innerHTML=`<div class="timerbar"><div class="row"><div><div class="sub">${session.name} · ${done}/${total} Sätze</div><div class="timer" id="restTimer">Bereit</div></div><button class="mini" onclick="addRest(30)">+30s</button> <button class="mini" onclick="liveAddExercise()">+ Übung</button></div><div class="progress"><span style="width:${total?done/total*100:0}%"></span></div></div>${session.exercises.map((e,ei)=>{const p=lastForExercise(e.name);return`<div class="exercise"><div class="exercise-head"><div class="exerciseVisual">${exerciseVisual(ruleFor(e.name))}</div><div><div class="ex-name">${e.name}</div><div class="prev">${p?`${p.weight||"–"} kg × ${p.reps||"–"} · RIR ${p.rir??"–"}`:"Noch kein Verlauf"}</div><div class="progression">${progressionFor(e.name)}</div><div class="muscleRow">${(ruleFor(e.name).primary||[]).map(m=>`<span class="musclePill">${m}</span>`).join("")}</div><div class="liveActions"><button class="mini" onclick="liveReplaceExercise(${ei})">Ersetzen</button><button class="mini" onclick="liveMoveExercise(${ei},-1)">↑</button><button class="mini" onclick="liveMoveExercise(${ei},1)">↓</button><button class="mini" onclick="liveRemoveExercise(${ei})">Entfernen</button></div></div></div><div class="set-head"><span>#</span><span>kg</span><span>Wdh.</span><span>RIR</span><span></span></div>${e.sets.map((s,si)=>`<div class="setrow"><div class="setnum">${si+1}</div><input inputmode="decimal" value="${s.weight}" oninput="editSet(${ei},${si},'weight',this.value)"><input inputmode="numeric" value="${s.reps}" oninput="editSet(${ei},${si},'reps',this.value)"><select onchange="editSet(${ei},${si},'rir',this.value)">${["0","1","2","3","4+"].map(v=>`<option ${String(s.rir)===v?"selected":""}>${v}</option>`).join("")}</select><button class="done ${s.done?"on":""}" onclick="toggleSet(${ei},${si})">${s.done?"✓":"○"}</button></div>`).join("")}<div><button class="mini" onclick="addSet(${ei})">+ Satz</button> ${e.sets.length>1?`<button class="mini" onclick="removeSet(${ei})">− Satz</button>`:""}</div></div>`}).join("")}<button class="primary" onclick="openFinish()">Training abschließen</button>`;renderRestTimer()}
 window.editSet=(ei,si,k,v)=>session.exercises[ei].sets[si][k]=v;window.toggleSet=(ei,si)=>{let s=session.exercises[ei].sets[si];s.done=!s.done;if(s.done)startRest();renderWorkout()};window.addSet=ei=>{let a=session.exercises[ei].sets,l=a[a.length-1]||{};a.push({weight:l.weight||"",reps:l.reps||"",rir:l.rir||"2",done:false});renderWorkout()};window.removeSet=ei=>{session.exercises[ei].sets.pop();renderWorkout()};window.addRest=s=>{restUntil=Math.max(Date.now(),restUntil)+s*1000;renderRestTimer()}
 function stats(){let sets=0,vol=0;session.exercises.forEach(e=>e.sets.forEach(s=>{if(s.done){sets++;vol+=(+s.weight||0)*(+s.reps||0)}}));return{sets,vol,mins:Math.max(1,Math.round((Date.now()-session.start)/60000))}};window.openFinish=()=>{const s=stats();finishDuration.textContent=s.mins+" min";finishSets.textContent=s.sets;finishVolume.textContent=Math.round(s.vol).toLocaleString("de-DE")+" kg";finishModal.classList.add("open")};cancelFinish.onclick=()=>finishModal.classList.remove("open");confirmFinish.onclick=()=>{const s=stats(),h=histories();h.push({date:new Date().toISOString(),name:session.name,duration:s.mins,volume:s.vol,note:sessionNote.value,exercises:session.exercises});saveHist(h);awardXP(120,"first_workout");session=null;sessionNote.value="";finishModal.classList.remove("open");showPage("progressPage")}
 
