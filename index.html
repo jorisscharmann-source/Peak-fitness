@@ -119,7 +119,7 @@ button,input,select,textarea{max-width:100%;min-width:0}
         <div class="privacyNote">Die Datei wird nicht zu GitHub hochgeladen und nicht automatisch versendet. Bewahre sie nur in deiner Dateien-App bzw. einem privaten Backup auf.</div>
       </div>
     </div></div>
-    <div class="app"><div class="header"><div class="brand"><div class="logo">🏋️</div><div><h1>Peak Fitness</h1><div class="kicker">Hypertrophy-first Hybrid · v10.3</div></div></div></div>
+    <div class="app"><div class="header"><div class="brand"><div class="logo">🏋️</div><div><h1>Peak Fitness</h1><div class="kicker">Hypertrophy-first Hybrid · v10.4</div></div></div></div>
 <section id="home" class="section active"></section><section id="workout" class="section"></section><section id="calendar" class="section"></section><section id="progressPage" class="section"></section><section id="coach" class="section"></section><section id="more" class="section"></section></div>
 <div class="bottomnav"><div class="bottominner"><button class="navbtn active" data-page="home"><span class="ico">⌂</span>Heute</button><button class="navbtn" data-page="workout"><span class="ico">●</span>Training</button><button class="navbtn" data-page="calendar"><span class="ico">▦</span>Plan</button><button class="navbtn" data-page="progressPage"><span class="ico">↗</span>Fortschritt</button><button class="navbtn" data-page="coach"><span class="ico">✦</span>Coach</button></div></div>
 <div id="finishModal" class="modal"><div class="sheet"><div class="title">Training abschließen</div><div class="card soft"><div class="metric"><span>Dauer</span><strong id="finishDuration">–</strong></div><div class="metric"><span>Sätze</span><strong id="finishSets">–</strong></div><div class="metric"><span>Volumen</span><strong id="finishVolume">–</strong></div></div><label>Notiz</label><textarea id="sessionNote"></textarea><button class="primary" id="confirmFinish" style="margin-top:10px">Speichern & beenden</button><button class="secondary" id="cancelFinish" style="margin-top:7px">Zurück</button></div></div>
@@ -280,14 +280,12 @@ function loadScore(){
   return {gym7,cardio7,fatigue};
 }
 function peakFitnessScore(){
-  const tests=fitnessTests().slice(-1)[0]||{};
-  function clamp(v,min,max){return Math.max(0,Math.min(100,(v-min)/(max-min)*100))}
-  const strength=Math.round(((clamp(tests.pullups||0,0,20)+clamp(tests.pushups||0,10,60))/2));
-  const endurance=Math.round(((tests.run5k?clamp(1800-(tests.run5k||1800),0,600):0)+(tests.stair30?clamp(tests.stair30,5,15):0))/2);
-  const work=Math.round(((tests.plank?clamp(tests.plank,60,240):0)+(tests.march20?clamp(180-tests.march20,0,90):0))/2);
-  const m=mobilityTests(), mobility=Math.round(((m.ankle+m.squat+m.hip+m.shoulder-4)/16)*100);
-  const overall=Math.round((strength+endurance+work+mobility)/4);
-  return {strength,endurance,work,mobility,overall};
+ const h=histories(),c=cardioHist(),m=mobilityTests(),r=readiness(),last28=new Date();last28.setDate(last28.getDate()-28);
+ const gym28=h.filter(x=>new Date(x.date)>=last28).length,cardio28=c.filter(x=>new Date(x.date)>=last28).length;
+ const consistency=Math.min(100,Math.round(gym28/16*100)),endurance=Math.min(100,Math.round(cardio28/8*100));
+ const mobility=Math.max(0,Math.min(100,Math.round(((m.ankle+m.squat+m.hip+m.shoulder-4)/16)*100)));
+ const recovery=Math.max(0,Math.min(100,Math.round((r.sleep/8)*40+(r.energy/5)*25+((6-r.soreness)/5)*20+((6-r.stress)/5)*15)));
+ return {strength:consistency,endurance,work:recovery,mobility,overall:Math.round(consistency*.35+endurance*.25+mobility*.15+recovery*.25)};
 }
 function recentLoad(){
   const now=new Date(), start=new Date(); start.setDate(now.getDate()-7);
@@ -322,7 +320,7 @@ function completedThisWeek(){
   return histories().filter(x=>new Date(x.date)>=monday).map(x=>x.name);
 }
 function adaptiveWeek(){
-  const r=readiness(), today=new Date(), result=[];
+  const r=readiness(), today=new Date(), result=[], deload=fatigueTrend().deload;
   const gymQueue=["Upper A","Lower A","Upper B","Lower B"];
   let gymIndex=0, cardioHard=0, cardioEasy=0;
   const readinessScore=(r.sleep>=7?1:0)+(r.energy>=3?1:0)+(r.soreness<=2?1:0)+(r.stress<=2?1:0);
@@ -333,11 +331,11 @@ function adaptiveWeek(){
     const canGym=free && gymIndex<4;
     if(canGym){
       plan=gymQueue[gymIndex++];
-      note="Hypertrophie · 6–15 Wdh. · meist 1–3 RIR";
+      note=deload?"Deload · 50–70 % Volumen · 3–4 RIR":"Hypertrophie · 6–15 Wdh. · meist 1–3 RIR";
     } else if(cardioEasy<2 && (free || sh==="T")){
       plan="Zone 2";
       note="30–45 min · locker, Gespräch möglich";cardioEasy++;
-    } else if(cardioHard<1 && free && gymIndex>=2){
+    } else if(!deload && cardioHard<1 && free && gymIndex>=2){
       plan="Intervalle";
       note="6×1–2 min hart / 2 min locker";cardioHard++;
     } else if(sh==="N"){
@@ -351,6 +349,15 @@ function adaptiveWeek(){
   }
   return result;
 }
+
+function fatigueTrend(){
+ const h=histories().slice(-8),logs=dailyLogs();let lowDays=0;
+ for(let i=0;i<5;i++){const d=new Date();d.setDate(d.getDate()-i);const x=logs[iso(d)];if(x&&((x.energy||3)<=2||(x.soreness||2)>=4||(x.sleep||7)<6))lowDays++}
+ let performanceDrop=0;if(h.length>=4){const recent=h.slice(-2).reduce((a,x)=>a+(+x.volume||0),0)/2,prior=h.slice(-4,-2).reduce((a,x)=>a+(+x.volume||0),0)/2;if(prior>0&&recent<prior*.85)performanceDrop=1}
+ return {lowDays,performanceDrop,deload:lowDays>=3||performanceDrop===1};
+}
+function deloadAdvice(){const f=fatigueTrend();if(f.deload)return "Deload empfohlen: 5–7 Tage 30–50 % weniger Sätze und keine harten Intervalle.";if(f.lowDays>=2)return "Ermüdung steigt: nächste harte Einheit konservativ planen.";return "Belastung wirkt aktuell gut verträglich.";}
+
 function coachSummary(){
   const tl=todayLog();
   const r=readiness(), done=completedThisWeek();
@@ -419,23 +426,11 @@ function renderCoach(){
       <div class="scoreCard"><b>${s.mobility}</b><span>Mobility</span></div>
     </div>
   </div>
-  <div class="card">
+  <div class="card"><div class="row"><div><div class="title">Ermüdungsmanagement</div><div class="sub">Aus Schlaf, Muskelkater, Energie und Leistungsentwicklung.</div></div><span class="scienceTag">Auto</span></div><div class="${fatigueTrend().deload?"alert":"good"}">${deloadAdvice()}</div></div><div class="card">
     <div class="title">Nächste 7 Tage</div>
     ${week.map(x=>`<div class="metric"><span><b>${fmt(x.date,{weekday:"short",day:"2-digit",month:"2-digit"})}</b><div class="sub">${effectiveShiftName(x.shift)} · ${x.note}</div></span><strong>${x.plan}</strong></div>`).join("")}
   </div>
-  <div class="card">
-    <div class="title">Fitness-Tests</div>
-    <div class="sub">Alle 2–4 Wochen aktualisieren. Zeiten in Sekunden.</div>
-    <div class="testRow"><label>5 km Zeit</label><input id="t5k" inputmode="numeric" placeholder="z. B. 1500"></div>
-    <div class="testRow"><label>Klimmzüge</label><input id="tpull" inputmode="numeric"></div>
-    <div class="testRow"><label>Liegestütze</label><input id="tpush" inputmode="numeric"></div>
-    <div class="testRow"><label>Plank Sekunden</label><input id="tplank" inputmode="numeric"></div>
-    <div class="testRow"><label>Stairmaster Stufe bei 30 min</label><input id="tstair" inputmode="decimal"></div>
-    <div class="testRow"><label>20 km Marsch Minuten</label><input id="tmarch" inputmode="numeric"></div>
-    <button class="secondary full" style="margin-top:9px" onclick="saveFitnessTest()">Tests speichern + XP</button>
-  </div>
-  <div class="card">
-    <div class="title">Mobility-Test</div>
+  <div class="card"><div class="title">Mobility-Test</div>
     <div class="sub">1 = stark eingeschränkt · 5 = sehr gut</div>
     ${[["ankle","Sprunggelenk"],["squat","Tiefe Hocke"],["hip","Hüfte"],["shoulder","Schulter"]].map(([k,l])=>`<div class="metric"><span>${l}</span><input id="m_${k}" style="width:70px" value="${mob[k]}" inputmode="numeric"></div>`).join("")}
     <button class="secondary full" style="margin-top:8px" onclick="saveMobilityTest()">Mobility speichern</button>
@@ -486,9 +481,6 @@ function renderCoach(){
     <div class="title">Native Features</div>
     <div class="alert">Lockscreen-/Dynamic-Island-Pausentimer brauchen später eine echte iOS-App. Die PWA kann das nicht zuverlässig.</div>
   </div>`;
-}
-window.saveFitnessTest=()=>{
-  const a=fitnessTests();a.push({date:iso(new Date()),run5k:+t5k.value||0,pullups:+tpull.value||0,pushups:+tpush.value||0,plank:+tplank.value||0,stair30:+tstair.value||0,march20:+tmarch.value||0});saveTests(a);awardXP(100,"tests_logged");renderCoach();
 }
 window.saveMobilityTest=()=>{saveMobTests({ankle:+m_ankle.value||3,squat:+m_squat.value||3,hip:+m_hip.value||3,shoulder:+m_shoulder.value||3});awardXP(40,"mobility_test");renderCoach()}
 window.saveWeeklyReview=()=>{const a=weeklyReviews();a.push({date:iso(new Date()),...weeklySummaryData()});saveWeeklyReviews(a);awardXP(150,"weekly_review");renderCoach();renderHome()}
@@ -574,7 +566,18 @@ window.renamePlan=(oldName)=>{
  workouts[n]=workouts[oldName];delete workouts[oldName];saveWorkouts();renderMore();renderWorkout();
 }
 
-function renderMore(){const t=mobilityLog()[iso(new Date())]||Array(moves.length).fill(false);more.innerHTML=`<div class="card hero"><div class="title">Mehr</div><div class="sub">Mobility, Urlaub, Einstellungen & Backup.</div></div><div class="card mobility"><div class="title">Mobility heute</div>${moves.map((x,i)=>`<div class="move"><button class="check ${t[i]?"on":""}" onclick="toggleMob(${i})">${t[i]?"✓":""}</button><span>${x[0]}</span><strong>${x[1]}</strong></div>`).join("")}</div><div class="card"><div class="title">Urlaub</div><div class="inline"><div><label>Von</label><input type="date" id="vacStart"></div><div><label>Bis</label><input type="date" id="vacEnd"></div></div><button class="secondary" style="margin-top:8px" onclick="addVacation()">Eintragen</button></div>${renderPlanEditor()}<div class="card"><div class="title">Privates Setup</div><div class="sub">Trainingsplan und Schichtrhythmus lokal aktualisieren.</div><button class="primary full" style="margin-top:8px" onclick="importPrivateSetup()">🔐 Setup-Datei auswählen</button></div><div class="card"><div class="title">App-Icon</div><div class="sub">Die Dateien icon-192.png und icon-512.png werden automatisch über das Manifest verwendet. Wenn auf dem Homescreen noch das alte Icon steht, entferne nur das Peak-Fitness-Homescreen-Icon und füge die Seite danach in Safari erneut über „Zum Home-Bildschirm“ hinzu. Deine lokalen Daten bleiben auf derselben Website-Adresse erhalten.</div></div><div class="card"><div class="title">Einstellungen</div><div class="metric"><span>Privates Setup</span><strong>🔐 lokal</strong></div><button class="secondary full" style="margin-bottom:7px" onclick="reimportPrivateSetup()">Setup neu importieren</button><div class="metric"><span>Satzpause</span><strong>${+localStorage.getItem("pf_rest_seconds")||120}s</strong></div><button class="secondary" onclick="setRest()">Satzpause ändern</button><button class="secondary" style="margin-top:7px" onclick="exportData()">Backup exportieren</button><button class="secondary" style="margin-top:7px" onclick="importData()">Backup importieren</button></div>`}
+
+function renderVacationList(){
+ const v=vacations();if(!v.length)return '<div class="sub">Noch kein Urlaub eingetragen.</div>';
+ return v.map((x,i)=>`<div class="metric"><span>${x.start.split("-").reverse().join(".")} – ${x.end.split("-").reverse().join(".")}</span><button class="mini" onclick="removeVacation(${i})">Löschen</button></div>`).join("");
+}
+window.addVacationRange=()=>{
+ const a=document.getElementById("vacStart").value,b=document.getElementById("vacEnd").value;if(!a||!b){alert("Bitte Start- und Enddatum auswählen.");return}
+ const v=vacations(),start=a<=b?a:b,end=a<=b?b:a;v.push({start,end});localStorage.setItem("pf_vacations",JSON.stringify(v));renderMore();renderCalendar();renderHome();renderCoach();
+}
+window.removeVacation=i=>{const v=vacations();v.splice(i,1);localStorage.setItem("pf_vacations",JSON.stringify(v));renderMore();renderCalendar();renderHome();renderCoach();}
+
+function renderMore(){const t=mobilityLog()[iso(new Date())]||Array(moves.length).fill(false);more.innerHTML=`<div class="card"><div class="row"><div><div class="title">Urlaub</div><div class="sub">Schichtrhythmus läuft weiter; Urlaub wird für die Trainingsplanung wie freie Zeit behandelt.</div></div><span class="badge vac">Urlaub</span></div><div class="inline"><div><label>Von</label><input type="date" id="vacStart"></div><div><label>Bis</label><input type="date" id="vacEnd"></div></div><button class="primary full" style="margin-top:8px" onclick="addVacationRange()">Urlaub eintragen</button><div style="margin-top:8px">${renderVacationList()}</div></div><div class="card hero"><div class="title">Mehr</div><div class="sub">Mobility, Urlaub, Einstellungen & Backup.</div></div><div class="card mobility"><div class="title">Mobility heute</div>${moves.map((x,i)=>`<div class="move"><button class="check ${t[i]?"on":""}" onclick="toggleMob(${i})">${t[i]?"✓":""}</button><span>${x[0]}</span><strong>${x[1]}</strong></div>`).join("")}</div><div class="card"><div class="title">Urlaub</div><div class="inline"><div><label>Von</label><input type="date" id="vacStart"></div><div><label>Bis</label><input type="date" id="vacEnd"></div></div><button class="secondary" style="margin-top:8px" onclick="addVacation()">Eintragen</button></div>${renderPlanEditor()}<div class="card"><div class="title">Privates Setup</div><div class="sub">Trainingsplan und Schichtrhythmus lokal aktualisieren.</div><button class="primary full" style="margin-top:8px" onclick="importPrivateSetup()">🔐 Setup-Datei auswählen</button></div><div class="card"><div class="title">App-Icon</div><div class="sub">Die Dateien icon-192.png und icon-512.png werden automatisch über das Manifest verwendet. Wenn auf dem Homescreen noch das alte Icon steht, entferne nur das Peak-Fitness-Homescreen-Icon und füge die Seite danach in Safari erneut über „Zum Home-Bildschirm“ hinzu. Deine lokalen Daten bleiben auf derselben Website-Adresse erhalten.</div></div><div class="card"><div class="title">Einstellungen</div><div class="metric"><span>Privates Setup</span><strong>🔐 lokal</strong></div><button class="secondary full" style="margin-bottom:7px" onclick="reimportPrivateSetup()">Setup neu importieren</button><div class="metric"><span>Satzpause</span><strong>${+localStorage.getItem("pf_rest_seconds")||120}s</strong></div><button class="secondary" onclick="setRest()">Satzpause ändern</button><button class="secondary" style="margin-top:7px" onclick="exportData()">Backup exportieren</button><button class="secondary" style="margin-top:7px" onclick="importData()">Backup importieren</button></div>`}
 window.addVacation=()=>{const a=vacStart.value,b=vacEnd.value;if(!a||!b)return;const v=vacations();v.push({start:a<=b?a:b,end:a<=b?b:a});localStorage.setItem("pf_vacations",JSON.stringify(v));renderMore();renderHome();renderCalendar()};window.reimportPrivateSetup=()=>{document.getElementById("setupOverlay").classList.add("show")};
 window.setRest=()=>{const x=prompt("Satzpause in Sekunden:",+localStorage.getItem("pf_rest_seconds")||120);if(x)localStorage.setItem("pf_rest_seconds",+x||120);renderMore()}
 window.exportData=()=>{const data={version:8,privateConfig:privateConfig(),workouts,histories:histories(),cardio:cardioHist(),body:bodyHist(),vacations:vacations(),mobility:mobilityLog(),restSeconds:+localStorage.getItem("pf_rest_seconds")||120,nutrition:nutrition(),tests:fitnessTests(),mobilityTests:mobilityTests(),weeklyReviews:weeklyReviews(),game:gamify(),dailyLogs:dailyLogs(),exerciseRules:exerciseRules()};const blob=new Blob([JSON.stringify(data,null,2)],{type:"application/json"}),a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="peak-fitness-backup.json";a.click()}
