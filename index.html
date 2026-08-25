@@ -129,7 +129,7 @@ button,input,select,textarea{max-width:100%;min-width:0}
         <div class="privacyNote">Die Datei wird nicht zu GitHub hochgeladen und nicht automatisch versendet. Bewahre sie nur in deiner Dateien-App bzw. einem privaten Backup auf.</div>
       </div>
     </div></div>
-    <div class="app"><div class="header"><div class="brand"><div class="logo">🏋️</div><div><h1>Peak Fitness</h1><div class="kicker">Hypertrophy-first Hybrid · v10.8</div></div></div></div>
+    <div class="app"><div class="header"><div class="brand"><div class="logo">🏋️</div><div><h1>Peak Fitness</h1><div class="kicker">Hypertrophy-first Hybrid · v10.9</div></div></div></div>
 <section id="home" class="section active"></section><section id="workout" class="section"></section><section id="calendar" class="section"></section><section id="progressPage" class="section"></section><section id="coach" class="section"></section><section id="more" class="section"></section></div>
 <div class="bottomnav"><div class="bottominner"><button class="navbtn active" data-page="home"><span class="ico">⌂</span>Heute</button><button class="navbtn" data-page="workout"><span class="ico">●</span>Training</button><button class="navbtn" data-page="calendar"><span class="ico">▦</span>Plan</button><button class="navbtn" data-page="progressPage"><span class="ico">↗</span>Fortschritt</button><button class="navbtn" data-page="coach"><span class="ico">✦</span>Coach</button></div></div>
 <div id="finishModal" class="modal"><div class="sheet"><div class="title">Training abschließen</div><div class="card soft"><div class="metric"><span>Dauer</span><strong id="finishDuration">–</strong></div><div class="metric"><span>Sätze</span><strong id="finishSets">–</strong></div><div class="metric"><span>Volumen</span><strong id="finishVolume">–</strong></div></div><label>Notiz</label><textarea id="sessionNote"></textarea><button class="primary" id="confirmFinish" style="margin-top:10px">Speichern & beenden</button><button class="secondary" id="cancelFinish" style="margin-top:7px">Zurück</button></div></div>
@@ -352,45 +352,66 @@ function completedThisWeek(){
   const monday=new Date(now); monday.setDate(now.getDate()-day); monday.setHours(0,0,0,0);
   return histories().filter(x=>new Date(x.date)>=monday).map(x=>x.name);
 }
+
+function sharedWeekPlan(){
+ const week=adaptiveWeek();
+ const map={};
+ week.forEach(x=>map[iso(x.date)]={plan:x.plan,note:x.note,shift:x.shift});
+ return map;
+}
+function planForDateSmart(d){
+ const map=sharedWeekPlan(),k=iso(d);
+ if(map[k])return map[k];
+ const old=planForDate(d);
+ return {plan:old||"",note:"",shift:effectiveShift(d)};
+}
+function cardioType(plan){
+ if(!plan)return"";
+ if(plan.includes("Zone 2"))return"zone2";
+ if(plan.includes("Intervall"))return"interval";
+ return"";
+}
+
 function adaptiveWeek(){
-  const r=readiness(), today=new Date(), result=[], deload=fatigueTrend().deload;
-  const gymQueue=["Upper A","Lower A","Upper B","Lower B"];
-  let gymIndex=0, cardioHard=0, cardioEasy=0;
-  const readinessScore=(r.sleep>=7?1:0)+(r.energy>=3?1:0)+(r.soreness<=2?1:0)+(r.stress<=2?1:0);
-  for(let i=0;i<7;i++){
-    const d=new Date(today);d.setDate(today.getDate()+i);const sh=effectiveShift(d);
-    let plan="Mobility + Erholung",note="10–15 min Mobility";
-    const free=sh==="F"||sh==="U";
-    const canGym=free && gymIndex<4;
-    if(canGym){
-      plan=gymQueue[gymIndex++];
-      note=deload?"Deload · 50–70 % Volumen · 3–4 RIR":"Hypertrophie · 6–15 Wdh. · meist 1–3 RIR";
-    } else if(cardioEasy<2 && (free || sh==="T")){
-      plan="Zone 2";
-      note="30–45 min · locker, Gespräch möglich";cardioEasy++;
-    } else if(!deload && cardioHard<1 && free && gymIndex>=2){
-      plan="Intervalle";
-      note="6×1–2 min hart / 2 min locker";cardioHard++;
-    } else if(sh==="N"){
-      plan="Mobility + Spaziergang";
-      note="Regeneration priorisieren";
-    }
-    if(readinessScore<=1 && (plan.includes("Lower")||plan==="Intervalle")){
-      plan="Zone 2 / Mobility";note="Belastung wegen niedriger Readiness reduziert";
-    }
-    result.push({date:d,plan,note});
-  }
-  return result;
+ const today=new Date(),result=[],order=sequenceOrder(),deload=fatigueTrend().deload;
+ let idx=Math.max(0,order.indexOf(nextGymInSequence())),lastUpper=-99,lastLower=-99,zone=0,hiit=0;
+ for(let i=0;i<7;i++){
+   const d=new Date(today);d.setDate(today.getDate()+i);
+   const sh=effectiveShift(d),free=sh==="F"||sh==="U";
+   let plan="Mobility + Erholung",note="10–15 min Mobility";
+   if(free&&order.length){
+     const cand=order[idx%order.length],type=splitType(cand),last=type==="upper"?lastUpper:lastLower;
+     if(i-last>=2){
+       plan=cand;
+       note=deload?"Deload · 50–70 % Volumen · 3–4 RIR":"Hypertrophie · 1–3 RIR";
+       if(type==="upper")lastUpper=i;else lastLower=i;
+       idx++;
+     }else if(zone<2){
+       plan="Zone 2";
+       note="30–45 min locker · Gespräch möglich";
+       zone++;
+     }else if(!deload&&hiit<1){
+       plan="Intervalle";
+       note="6×1–2 min hart / ca. 2 min locker";
+       hiit++;
+     }
+   }else if(sh==="T"){
+     if(zone<2){
+       plan="Optional Zone 2";
+       note="20–30 min locker · nur wenn Energie gut";
+       zone++;
+     }else{
+       plan="Mobility";
+       note="10–15 min · Schichttag";
+     }
+   }else if(sh==="N"){
+     plan="Mobility + Schlaf";
+     note="Nachtschicht · Regeneration priorisieren";
+   }
+   result.push({date:d,plan,note,shift:sh});
+ }
+ return result;
 }
-
-function fatigueTrend(){
- const h=histories().slice(-8),logs=dailyLogs();let lowDays=0;
- for(let i=0;i<5;i++){const d=new Date();d.setDate(d.getDate()-i);const x=logs[iso(d)];if(x&&((x.energy||3)<=2||(x.soreness||2)>=4||(x.sleep||7)<6))lowDays++}
- let performanceDrop=0;if(h.length>=4){const recent=h.slice(-2).reduce((a,x)=>a+(+x.volume||0),0)/2,prior=h.slice(-4,-2).reduce((a,x)=>a+(+x.volume||0),0)/2;if(prior>0&&recent<prior*.85)performanceDrop=1}
- return {lowDays,performanceDrop,deload:lowDays>=3||performanceDrop===1};
-}
-function deloadAdvice(){const f=fatigueTrend();if(f.deload)return "Deload empfohlen: 5–7 Tage 30–50 % weniger Sätze und keine harten Intervalle.";if(f.lowDays>=2)return "Ermüdung steigt: nächste harte Einheit konservativ planen.";return "Belastung wirkt aktuell gut verträglich.";}
-
 function coachSummary(){
   const tl=todayLog();
   const r=readiness(), done=completedThisWeek();
@@ -459,7 +480,9 @@ function renderCoach(){
       <div class="scoreCard"><b>${s.mobility}</b><span>Mobility</span></div>
     </div>
   </div>
-  <div class="card"><div class="row"><div><div class="title">Ermüdungsmanagement</div><div class="sub">Aus Schlaf, Muskelkater, Energie und Leistungsentwicklung.</div></div><span class="scienceTag">Auto</span></div><div class="${fatigueTrend().deload?"alert":"good"}">${deloadAdvice()}</div></div><div class="card">
+  <div class="card"><div class="row"><div><div class="title">Ermüdungsmanagement</div><div class="sub">Aus Schlaf, Muskelkater, Energie und Leistungsentwicklung.</div></div><span class="scienceTag">Auto</span></div><div class="${fatigueTrend().deload?"alert":"good"}">${deloadAdvice()}</div></div><div class="card"><div class="title">Cardio diese Woche</div>
+ ${week.filter(x=>cardioType(x.plan)).map(x=>`<div class="metric"><span>${fmt(x.date,{weekday:"short",day:"2-digit",month:"2-digit"})}<div class="sub">${x.note}</div></span><strong>${x.plan}</strong></div>`).join("")||`<div class="sub">Aktuell kein separates Cardio nötig.</div>`}
+ </div><div class="card">
     <div class="title">Nächste 7 Tage</div>
     ${week.map(x=>`<div class="metric"><span><b>${fmt(x.date,{weekday:"short",day:"2-digit",month:"2-digit"})}</b><div class="sub">${effectiveShiftName(x.shift)} · ${x.note}</div></span><strong>${x.plan}</strong></div>`).join("")}
   </div>
@@ -526,9 +549,11 @@ window.loadHistoricalDay=()=>{const k=historyDate.value;if(!k)return;const x=dai
 window.saveHistoricalDay=k=>{const logs=dailyLogs(),old=logs[k]||{};logs[k]={...old,sleep:+hSleep.value||0,quality:+hQuality.value||3,energy:+hEnergy.value||3,soreness:+hSoreness.value||2,stress:+hStress.value||2,rhr:+hRhr.value||0,steps:+hSteps.value||0,water:+hWater.value||0,dayLoad:+hLoad.value||3,eveningNote:hNote.value||"",morningDone:true,eveningDone:true};saveDailyLogs(logs);alert("Tag gespeichert.");renderHome();renderCoach()}
 
 function renderHome(){
- const d=new Date(),eff=effectiveShift(d),rec=recommendation(d),latest=bodyHist().slice(-1)[0],lastC=cardioHist().slice(-1)[0],t=todayLog(),avg=sleep7();
+ const d=new Date(),eff=effectiveShift(d),todayPlan=planForDateSmart(d),rec={main:todayPlan.plan||recommendation(d).main,extra:todayPlan.note||recommendation(d).extra},latest=bodyHist().slice(-1)[0],lastC=cardioHist().slice(-1)[0],t=todayLog(),avg=sleep7();
  home.innerHTML=`<div class="card hero"><div class="row"><div class="sub">${fmt(d)}</div><span class="badge ${effectiveCls(eff)}">${effectiveShiftName(eff)}</span></div><div class="big">${rec.main}</div><div class="sub">${rec.extra}</div><div class="sub" style="margin-top:7px">${coachSummary()}</div>${keys().includes(rec.main)?`<button class="primary" style="margin-top:13px" onclick="quickStart('${rec.main}')">Training starten</button>`:""}<div class="quick"><button onclick="document.getElementById('morningCard').scrollIntoView({behavior:'smooth'})"><b>Morgen</b><span>${t.morningDone?"✓ erledigt":"Check-in"}</span></button><button onclick="document.getElementById('eveningCard').scrollIntoView({behavior:'smooth'})"><b>Abend</b><span>${t.eveningDone?"✓ erledigt":"Tagesabschluss"}</span></button><button onclick="showPage('progressPage')"><b>Gewicht</b><span>${latest?latest.weight+" kg":"noch leer"}</span></button><button onclick="document.getElementById('mobilityHome').scrollIntoView({behavior:'smooth'})"><b>Mobility</b><span>${mobilityToday().filter(Boolean).length}/${moves.length}</span></button></div></div>
- <div class="card" id="morningCard">
+ <div class="card"><div class="row"><div><div class="title">Cardio-Plan</div><div class="sub">Diese Woche automatisch eingeplant</div></div><span class="scienceTag">Coach</span></div>
+ ${adaptiveWeek().filter(x=>cardioType(x.plan)).map(x=>`<div class="metric"><span><b>${fmt(x.date,{weekday:"short",day:"2-digit",month:"2-digit"})}</b><div class="sub">${x.note}</div></span><strong>${x.plan}</strong></div>`).join("")||`<div class="sub">Diese Woche aktuell kein separates Cardio eingeplant.</div>`}
+ </div><div class="card" id="morningCard">
    <div class="row"><div><div class="title">Morgen-Check-in</div><div class="sub">Direkt nach dem Aufstehen · steuert den Tagesplan</div></div><span class="badge ${t.morningDone?"off":""}">${t.morningDone?"erledigt":"offen"}</span></div>
    <div class="trackerGrid">
     <div class="trackBox"><label>Schlaf (h)</label><input id="mSleep" inputmode="decimal" value="${t.sleep}"></div>
@@ -601,8 +626,28 @@ window.addVacationPlan=()=>{
  const v=vacations(),start=a<=b?a:b,end=a<=b?b:a;v.push({start,end});localStorage.setItem("pf_vacations",JSON.stringify(v));renderCalendar();renderHome();renderCoach();
 }
 
-function renderCalendar(){const b=calendarBase,y=b.getFullYear(),m=b.getMonth(),f=new Date(y,m,1,12),last=new Date(y,m+1,0,12),lead=(f.getDay()+6)%7;let cells="";for(let i=0;i<lead;i++)cells+="<div></div>";for(let n=1;n<=last.getDate();n++){const d=new Date(y,m,n,12),s=effectiveShift(d),p=planForDate(d);cells+=`<div class="daycell ${iso(d)===iso(selectedDate)?"sel":""}" onclick="pickDate(${y},${m},${n})"><div class="num">${n}</div><div class="shiftline"><span class="dot ${effectiveCls(s)}"></span>${shortShiftName(s)}</div><div class="trainline">${p||""}</div></div>`}const r=recommendation(selectedDate);calendar.innerHTML=`<div class="card"><div class="row"><button class="mini" onclick="moveMonth(-1)">‹</button><div class="title">${fmt(b,{month:"long",year:"numeric"})}</div><button class="mini" onclick="moveMonth(1)">›</button></div><div class="grid" style="margin-top:10px">${["Mo","Di","Mi","Do","Fr","Sa","So"].map(x=>`<div class="dow">${x}</div>`).join("")}${cells}</div></div><div class="card science"><div class="row"><div><div class="title">Trainingssystem</div><div class="sub">Hypertrophie-first · flexibel über deinen Schichtrhythmus</div></div><span class="scienceTag">v10</span></div><div class="ruleGrid"><div class="ruleCard"><b>4</b><span>Krafteinheiten / Mikrozyklus</span></div><div class="ruleCard"><b>1–3</b><span>RIR bei den meisten Sätzen</span></div><div class="ruleCard"><b>2×</b><span>Zone 2 / Mikrozyklus</span></div><div class="ruleCard"><b>10–15</b><span>Min. Mobility häufig</span></div></div></div><div class="card"><div class="row"><div><div class="title">Urlaub</div><div class="sub">Urlaub wird wie freie Zeit behandelt; der Schichtrhythmus läuft weiter.</div></div><span class="badge vac">Plan</span></div><div class="inline"><div><label>Von</label><input type="date" id="vacPlanStart"></div><div><label>Bis</label><input type="date" id="vacPlanEnd"></div></div><button class="secondary full" style="margin-top:8px" onclick="addVacationPlan()">Urlaub eintragen</button><div style="margin-top:8px">${renderVacationList()}</div></div><div class="card soft"><div class="row"><div><div class="sub">${fmt(selectedDate)}</div><div class="title">${r.main}</div></div><span class="badge ${effectiveCls(effectiveShift(selectedDate))}">${effectiveShiftName(effectiveShift(selectedDate))}</span></div><div class="sub" style="margin-top:5px">${r.extra}</div></div>`};window.pickDate=(y,m,n)=>{selectedDate=new Date(y,m,n,12);renderCalendar()};window.moveMonth=d=>{calendarBase=new Date(calendarBase.getFullYear(),calendarBase.getMonth()+d,1,12);renderCalendar()}
-function weightChart(){const a=bodyHist().slice(-12);if(!a.length)return`<div class="sub">Noch keine Gewichte gespeichert.</div>`;const v=a.map(x=>+x.weight),mn=Math.min(...v),mx=Math.max(...v),rg=Math.max(1,mx-mn);return`<div class="chart">${a.map(x=>`<div class="bar" style="height:${20+75*((+x.weight-mn)/rg)}%"></div>`).join("")}</div>`}
+function renderCalendar(){
+ const b=calendarBase,y=b.getFullYear(),m=b.getMonth(),f=new Date(y,m,1,12),last=new Date(y,m+1,0,12),lead=(f.getDay()+6)%7;
+ const smart=sharedWeekPlan();
+ let cells="";
+ for(let i=0;i<lead;i++)cells+="<div></div>";
+ for(let n=1;n<=last.getDate();n++){
+   const d=new Date(y,m,n,12),s=effectiveShift(d),info=smart[iso(d)]||{plan:"",note:""};
+   const cardio=cardioType(info.plan);
+   cells+=`<div class="daycell ${iso(d)===iso(selectedDate)?"sel":""}" onclick="pickDate(${y},${m},${n})">
+     <div class="num">${n}</div>
+     <div class="shiftline"><span class="dot ${effectiveCls(s)}"></span>${shortShiftName(s)}</div>
+     <div class="trainline">${info.plan||""}</div>
+     ${cardio?`<div class="trainline">${cardio==="zone2"?"❤️ Zone 2":"⚡ Intervalle"}</div>`:""}
+   </div>`;
+ }
+ const chosen=smart[iso(selectedDate)]||{plan:"",note:""};
+ calendar.innerHTML=`<div class="card"><div class="row"><button class="mini" onclick="moveMonth(-1)">‹</button><div class="title">${fmt(b,{month:"long",year:"numeric"})}</div><button class="mini" onclick="moveMonth(1)">›</button></div><div class="grid" style="margin-top:10px">${["Mo","Di","Mi","Do","Fr","Sa","So"].map(x=>`<div class="dow">${x}</div>`).join("")}${cells}</div></div>
+ <div class="card"><div class="row"><div><div class="title">${fmt(selectedDate,{weekday:"long",day:"2-digit",month:"long"})}</div><div class="sub">${effectiveShiftName(effectiveShift(selectedDate))}</div></div><span class="badge">${chosen.plan||"kein Plan"}</span></div>
+ <div class="good" style="margin-top:8px">${chosen.note||"Der Kalender übernimmt direkt die Empfehlung des Coaches."}</div>
+ ${cardioType(chosen.plan)?`<button class="secondary full" style="margin-top:8px" onclick="openCardio()">Cardio öffnen</button>`:""}</div>
+ <div class="card science"><div class="title">Gemeinsamer Wochenplan</div><div class="sub">Kalender und Coach verwenden jetzt dieselbe Planung. Änderungen an Recovery, Urlaub und Schicht wirken auf beide Bereiche.</div></div>`;
+}
 function renderProgress(){const h=histories().slice().reverse();progressPage.innerHTML=`<div class="card hero"><div class="title">Fortschritt</div><div class="metric"><span>Trainings</span><strong>${h.length}</strong></div><div class="metric"><span>Gesamtvolumen</span><strong>${Math.round(h.reduce((a,x)=>a+(+x.volume||0),0)).toLocaleString("de-DE")} kg</strong></div></div><div class="card"><div class="title">Körpergewicht</div>${weightChart()}<div class="inline"><div><label>kg</label><input id="weightInput" inputmode="decimal"></div><div><label>Datum</label><input id="weightDate" type="date" value="${iso(new Date())}"></div></div><button class="secondary" style="margin-top:8px" onclick="addWeight()">Speichern</button></div><div class="card"><div class="title">Letzte Trainings</div>${h.slice(0,8).map(x=>`<div class="metric"><span>${x.name}<div class="sub">${fmt(new Date(x.date),{day:"2-digit",month:"short"})}</div></span><strong>${x.duration} min</strong></div>`).join("")||`<div class="sub">Noch nichts gespeichert.</div>`}</div><div class="card"><div class="title">Cardio</div><button class="secondary" onclick="openCardio()">Cardio eintragen</button>${cardioHist().slice(-3).reverse().map(x=>`<div class="metric"><span>${x.type}</span><strong>${x.minutes} min</strong></div>`).join("")}</div>`};window.addWeight=()=>{const w=+weightInput.value,d=weightDate.value;if(!w||!d)return;const a=bodyHist();a.push({date:d,weight:w});a.sort((x,y)=>x.date.localeCompare(y.date));saveBody(a);renderProgress();renderHome()}
 window.openCardio=()=>{showPage("more");more.innerHTML=`<div class="card hero"><div class="title">Cardio eintragen</div></div><div class="card"><label>Typ</label><select id="cardioType"><option>Stairmaster Zone 2</option><option>Stairmaster Intervalle</option><option>Laufen</option><option>Wandern / Marsch</option><option>Schwimmen</option></select><div class="inline"><div><label>Dauer min</label><input id="cardioMinutes"></div><div><label>Ø Puls</label><input id="cardioPulse"></div></div><label>Stufe / Pace</label><input id="cardioLevel"><label>Distanz km</label><input id="cardioDistance"><button class="primary" style="margin-top:9px" onclick="saveCardioEntry()">Speichern</button></div>`};window.saveCardioEntry=()=>{const a=cardioHist();a.push({date:iso(new Date()),type:cardioType.value,minutes:+cardioMinutes.value||0,pulse:+cardioPulse.value||0,level:cardioLevel.value,distance:+cardioDistance.value||0});saveCardio(a);showPage("progressPage")}
 window.toggleMob=i=>{const l=mobilityLog(),k=iso(new Date()),a=l[k]||Array(moves.length).fill(false);a[i]=!a[i];l[k]=a;saveMobility(l);if(a.filter(Boolean).length===moves.length)awardXP(35,"mobility_full");renderMore();renderHome()}
