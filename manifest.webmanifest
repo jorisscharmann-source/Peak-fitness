@@ -3,9 +3,8 @@
   "short_name": "Peak Fitness",
   "start_url": "./index.html",
   "display": "standalone",
-  "background_color": "#0b0d12",
-  "theme_color": "#0b0d12",
-  "description": "Hypertrophy-first Hybrid Coach: Muskelaufbau, Ausdauer, Mobility und Recovery.",
+  "background_color": "#090c12",
+  "theme_color": "#090c12",
   "icons": [
     {
       "src": "icon-192.png",
