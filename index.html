@@ -34,7 +34,7 @@ button,input,select,textarea{font:inherit}button{cursor:pointer}.primary,.second
 <body>
 <div id="setup" class="setup"><div class="setupBox"><div class="big">🔐 Privates Setup</div><div class="sub">Trainingspläne und Schichtrhythmus liegen nur lokal. Importiere deine private JSON-Datei.</div><div class="card" style="margin-top:18px"><button class="primary" onclick="importPrivateSetup()">Private Setup-Datei importieren</button><div class="sub" style="margin-top:8px">Nicht auf GitHub hochladen.</div></div></div></div>
 <div class="app">
- <header class="header"><img class="logo" src="icon-192.png"><div><div class="brand">Peak Fitness</div><div class="kicker">Hypertrophy-first Hybrid · v11 Stable</div></div></header>
+ <header class="header"><img class="logo" src="icon-192.png"><div><div class="brand">Peak Fitness</div><div class="kicker">Hypertrophy-first Hybrid · v11.1</div></div></header>
  <section id="home" class="section active"></section>
  <section id="workout" class="section"></section>
  <section id="calendar" class="section"></section>
@@ -178,12 +178,57 @@ window.moveMonth=d=>{calendarBase=new Date(calendarBase.getFullYear(),calendarBa
 window.pickDate=(y,m,d)=>{selectedDate=new Date(y,m,d,12);renderCalendar()}
 window.addVacation=()=>{const a=$("vacStart").value,b=$("vacEnd").value;if(!a||!b)return alert("Datum wählen.");const v=vacations();v.push({start:a<=b?a:b,end:a<=b?b:a});saveVacations(v);renderCalendar();renderHome();renderCoach()}
 window.deleteVacation=i=>{const v=vacations();v.splice(i,1);saveVacations(v);renderCalendar();renderHome();renderCoach()}
+
+function cardioFields(type){
+ if(type==="Stairmaster"){
+   return `<div class="grid2"><div class="trackBox"><label>Zeit (Minuten)</label><input id="cardioMinutes" inputmode="numeric" placeholder="z. B. 30"></div><div class="trackBox"><label>Stockwerke / Stufen</label><input id="cardioFloors" inputmode="numeric" placeholder="z. B. 120"></div></div>`;
+ }
+ if(["Marsch","Joggen","Laufen","Wandern"].includes(type)){
+   return `<div class="grid2"><div class="trackBox"><label>Zeit (Minuten)</label><input id="cardioMinutes" inputmode="numeric" placeholder="z. B. 45"></div><div class="trackBox"><label>Entfernung (km)</label><input id="cardioDistance" inputmode="decimal" placeholder="z. B. 6.5"></div></div>`;
+ }
+ return `<div class="trackBox"><label>Zeit (Minuten)</label><input id="cardioMinutes" inputmode="numeric" placeholder="z. B. 35"></div>`;
+}
+function formatPace(minutes,distance){
+ if(!minutes||!distance)return "";
+ const pace=minutes/distance,whole=Math.floor(pace),sec=Math.round((pace-whole)*60);
+ const s=sec===60?0:sec,m=sec===60?whole+1:whole;
+ return `${m}:${String(s).padStart(2,"0")} min/km`;
+}
+function cardioDetails(x){
+ const bits=[];
+ if(x.minutes)bits.push(`${x.minutes} min`);
+ if(x.distance)bits.push(`${x.distance} km`);
+ if(x.floors)bits.push(`${x.floors} Stockwerke/Stufen`);
+ if(x.distance&&x.minutes)bits.push(formatPace(+x.minutes,+x.distance));
+ if(x.floors&&x.minutes)bits.push(`${(+x.floors/+x.minutes).toFixed(1)} / min`);
+ return bits.join(" · ");
+}
+window.updateCardioFields=()=>{
+ const type=$("cardioType")?.value||"Zone 2",box=$("cardioDynamic");
+ if(box)box.innerHTML=cardioFields(type);
+}
+
 function renderProgress(){
  const h=histories().slice().reverse(),b=bodyHist(),c=cardioHist().slice().reverse();
- $("progressPage").innerHTML=`<div class="card hero"><div class="title">Fortschritt</div><div class="sub">Training, Gewicht und Cardio</div></div><div class="card"><div class="title">Körpergewicht</div><div class="grid2"><input id="bodyWeight" inputmode="decimal" placeholder="kg"><button class="secondary" onclick="addWeight()">Speichern</button></div>${b.slice(-5).reverse().map(x=>`<div class="metric"><span>${x.date}</span><strong>${x.weight} kg</strong></div>`).join("")}</div><div class="card"><div class="title">Cardio eintragen</div><div class="grid2"><select id="cardioType"><option>Zone 2</option><option>Intervalle</option><option>Stairmaster</option><option>Wandern</option><option>Laufen</option></select><input id="cardioMinutes" inputmode="numeric" placeholder="Minuten"></div><button class="secondary" style="margin-top:8px" onclick="addCardio()">Speichern</button>${c.slice(0,6).map(x=>`<div class="metric"><span>${x.date}<div class="sub">${x.type}</div></span><strong>${x.minutes} min</strong></div>`).join("")}</div><div class="card"><div class="title">Trainingstagebuch</div>${h.slice(0,10).map(x=>`<div class="metric"><span>${x.name}<div class="sub">${fmt(x.date,{day:"2-digit",month:"2-digit",year:"2-digit"})}</div></span><strong>${Math.round(x.volume||0)} kg</strong></div>`).join("")||`<div class="sub">Noch keine Einheiten.</div>`}</div>`
+ $("progressPage").innerHTML=`<div class="card hero"><div class="title">Fortschritt</div><div class="sub">Training, Gewicht und Cardio</div></div><div class="card"><div class="title">Körpergewicht</div><div class="grid2"><input id="bodyWeight" inputmode="decimal" placeholder="kg"><button class="secondary" onclick="addWeight()">Speichern</button></div>${b.slice(-5).reverse().map(x=>`<div class="metric"><span>${x.date}</span><strong>${x.weight} kg</strong></div>`).join("")}</div><div class="card"><div class="title">Cardio eintragen</div><div class="sub">Je nach Cardio-Art werden passende Werte abgefragt.</div><label style="margin-top:10px">Art</label><select id="cardioType" onchange="updateCardioFields()"><option>Zone 2</option><option>Intervalle</option><option>Stairmaster</option><option>Marsch</option><option>Joggen</option><option>Laufen</option><option>Wandern</option></select><div id="cardioDynamic" style="margin-top:8px">${cardioFields("Zone 2")}</div><button class="secondary" style="margin-top:8px" onclick="addCardio()">Speichern</button>${c.slice(0,8).map(x=>`<div class="metric"><span>${x.date}<div class="sub">${x.type}</div></span><strong>${cardioDetails(x)||`${x.minutes||"–"} min`}</strong></div>`).join("")}</div><div class="card"><div class="title">Trainingstagebuch</div>${h.slice(0,10).map(x=>`<div class="metric"><span>${x.name}<div class="sub">${fmt(x.date,{day:"2-digit",month:"2-digit",year:"2-digit"})}</div></span><strong>${Math.round(x.volume||0)} kg</strong></div>`).join("")||`<div class="sub">Noch keine Einheiten.</div>`}</div>`
 }
 window.addWeight=()=>{const w=+$("bodyWeight").value;if(!w)return;const b=bodyHist();b.push({date:iso(new Date()),weight:w});saveBody(b);renderProgress()}
-window.addCardio=()=>{const min=+$("cardioMinutes").value;if(!min)return;const c=cardioHist();c.push({date:iso(new Date()),type:$("cardioType").value,minutes:min});saveCardio(c);renderProgress()}
+window.addCardio=()=>{
+ const type=$("cardioType").value,min=+$("cardioMinutes")?.value||0;
+ if(!min)return alert("Bitte die Zeit eintragen.");
+ const entry={date:iso(new Date()),type,minutes:min};
+ if(type==="Stairmaster"){
+   const floors=+$("cardioFloors")?.value||0;
+   if(!floors)return alert("Bitte Stockwerke/Stufen eintragen.");
+   entry.floors=floors;
+ }else if(["Marsch","Joggen","Laufen","Wandern"].includes(type)){
+   const distance=+$("cardioDistance")?.value||0;
+   if(!distance)return alert("Bitte die Entfernung in km eintragen.");
+   entry.distance=distance;
+   entry.pace=formatPace(min,distance);
+ }
+ const c=cardioHist();c.push(entry);saveCardio(c);renderProgress();
+}
 function coachScore(){const last28=new Date();last28.setDate(last28.getDate()-28);const gym=gymHistory().filter(x=>new Date(x.date)>=last28).length,cardio=cardioHist().filter(x=>new Date(x.date)>=last28).length,r=readiness(),mob=mobilityFor().filter(Boolean).length;return{training:Math.min(100,Math.round(gym/16*100)),cardio:Math.min(100,Math.round(cardio/8*100)),recovery:Math.max(0,Math.min(100,Math.round((r.sleep/8*40)+(r.energy/5*25)+((6-r.soreness)/5*20)+((6-r.stress)/5*15)))),mobility:Math.round(mob/moves.length*100)}}
 function renderCoach(){
  try{
